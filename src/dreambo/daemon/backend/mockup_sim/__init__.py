@@ -1,0 +1,10 @@
+"""Mockup Simulation Backend for Reachy Mini Daemon.
+
+A lightweight simulation backend that doesn't require MuJoCo.
+Uses only kinematics (no physics simulation).
+"""
+
+from dreambo.daemon.backend.mockup_sim.backend import MockupSimBackend
+from dreambo.io.protocol import MockupSimBackendStatus
+
+__all__ = ["MockupSimBackend", "MockupSimBackendStatus"]

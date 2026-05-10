@@ -1,0 +1,99 @@
+version: beta
+
+serial:
+  baudrate: 1000000
+
+# Motors for Dreambo torso (dreambo_motor_controller).
+# IDs and names must match dreambo_motor_controller's expected map:
+#   - Arms (SM40BL bus): IDs 1..4
+#   - Nose (STS3025BL bus): IDs 5..7
+# The Rust controller switches baudrate internally per-bus, so the
+# `serial.baudrate` field above is informational only.
+#
+# offset / lower_limit / upper_limit values below are placeholders
+# (offset = 2048, full 12-bit range). Calibrate per-robot.
+motors:
+  - left_arm_pitch:
+      id: 1
+      offset: 2048
+      lower_limit: 0
+      upper_limit: 4095
+      return_delay_time: 0
+      shutdown_error: 52
+      operating_mode: 0 # Dynamixel XL330: 3 | FEETECH SMS/STS: 0
+      pid:
+        - 44
+        - 0
+        - 0
+  - left_arm_yaw:
+      id: 2
+      offset: 2048
+      lower_limit: 0
+      upper_limit: 4095
+      return_delay_time: 0
+      shutdown_error: 52
+      operating_mode: 0
+      pid:
+        - 44
+        - 0
+        - 0
+  - right_arm_pitch:
+      id: 3
+      offset: 2048
+      lower_limit: 0
+      upper_limit: 4095
+      return_delay_time: 0
+      shutdown_error: 52
+      operating_mode: 0
+      pid:
+        - 44
+        - 0
+        - 0
+  - right_arm_yaw:
+      id: 4
+      offset: 2048
+      lower_limit: 0
+      upper_limit: 4095
+      return_delay_time: 0
+      shutdown_error: 52
+      operating_mode: 0
+      pid:
+        - 44
+        - 0
+        - 0
+  - nose_top:
+      id: 5
+      offset: 2048
+      lower_limit: 0
+      upper_limit: 4095
+      return_delay_time: 0
+      shutdown_error: 52
+      operating_mode: 0
+      pid:
+        - 100
+        - 0
+        - 0
+  - nose_left:
+      id: 6
+      offset: 2048
+      lower_limit: 0
+      upper_limit: 4095
+      return_delay_time: 0
+      shutdown_error: 52
+      operating_mode: 0
+      pid:
+        - 100
+        - 0
+        - 0
+  - nose_right:
+      id: 7
+      offset: 2048
+      lower_limit: 0
+      upper_limit: 4095
+      return_delay_time: 0
+      shutdown_error: 52
+      operating_mode: 0
+      pid:
+        - 100
+        - 0
+        - 0
