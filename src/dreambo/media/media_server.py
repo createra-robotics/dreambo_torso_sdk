@@ -761,6 +761,13 @@ class GstMediaServer:
         """
         self._logger.debug("Configuring audio")
 
+        if os.environ.get("DREAMBO_DISABLE_AUDIO"):
+            self._logger.info(
+                "Audio disabled via DREAMBO_DISABLE_AUDIO env var; "
+                "skipping audio pipeline entirely."
+            )
+            return
+
         audiosrc = self._build_audio_source()
         if audiosrc is None:
             self._logger.warning(

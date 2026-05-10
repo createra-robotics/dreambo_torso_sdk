@@ -182,10 +182,8 @@ class RobotBackend(Backend):
         if self._torque_enabled:
             if self._current_head_operation_mode != 0:  # if position control mode
                 if self.target_head_joint_positions is not None:
-                    self.c.set_stewart_platform_position(
-                        self.target_head_joint_positions[1:].tolist()
-                    )
-                    self.c.set_body_rotation(self.target_head_joint_positions[0])
+                    yaw = float(self.target_head_joint_positions[0])
+                    self.c.set_arms_position([0.0, yaw, 0.0, yaw])
             else:  # it's in torque control mode
                 if self.gravity_compensation_mode:
                     # This function will set the head_joint_current
@@ -202,8 +200,8 @@ class RobotBackend(Backend):
 
             if self._current_antennas_operation_mode != 0:  # if position control mode
                 if self.target_antenna_joint_positions is not None:
-                    self.c.set_antennas_positions(
-                        self.target_antenna_joint_positions.tolist()
+                    self.c.set_nose_position(
+                        [0.0] + self.target_antenna_joint_positions.tolist()
                     )
             # Antenna torque control is not supported with feetech motors
             # else:
@@ -370,13 +368,11 @@ class RobotBackend(Backend):
             # to the current positions to avoid sudden movements
             motor_pos = self.c.get_last_position()
             self.target_head_joint_positions = np.array(
-                [(motor_pos.left_arm[1] + motor_pos.right_arm[1]) / 2.0] + motor_pos.stewart
+                [(motor_pos.left_arm[1] + motor_pos.right_arm[1]) / 2.0] + [0.0] * 6
             )
 
-            self.c.set_stewart_platform_position(
-                self.target_head_joint_positions[1:].tolist()
-            )
-            self.c.set_body_rotation(self.target_head_joint_positions[0])
+            yaw = float(self.target_head_joint_positions[0])
+            self.c.set_arms_position([0.0, yaw, 0.0, yaw])
             self.c.enable_body_rotation(True)
             self.c.set_body_rotation_operating_mode(0)
         else:
@@ -414,15 +410,16 @@ class RobotBackend(Backend):
             if mode != 0:
                 # if the mode is not torque control, we need to set the head joint positions
                 # to the current positions to avoid sudden movements
+                last_nose = self.c.get_last_position().nose
                 self.target_antenna_joint_positions = np.array(
-                    self.c.get_last_position().antennas
+                    [last_nose[1], last_nose[2]]
                 )
-                self.c.set_antennas_positions(
-                    self.target_antenna_joint_positions.tolist()
+                self.c.set_nose_position(
+                    [0.0] + self.target_antenna_joint_positions.tolist()
                 )
-                self.c.enable_antennas(True)
+                self.c.enable_nose(True)
             else:
-                self.c.enable_antennas(False)
+                self.c.enable_nose(False)
 
             self._current_antennas_operation_mode = mode
 
@@ -438,8 +435,8 @@ class RobotBackend(Backend):
         positions = self.c.get_last_position()
 
         yaw = (positions.left_arm[1] + positions.right_arm[1]) / 2.0
-        antennas = positions.antennas
-        dofs = positions.stewart
+        antennas = [positions.nose[1], positions.nose[2]]
+        dofs = [0.0] * 6
 
         return [yaw] + list(dofs), list(antennas)
 

@@ -19,6 +19,7 @@ sudo apt install -y libgirepository-2.0-dev libcairo2-dev pkg-config python3-dev
 
 sudo apt install -y gir1.2-gstreamer-1.0 gir1.2-gst-plugins-base-1.0 gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav
 
+# Optional (Do not do this until new confirmation)
 sudo apt-get install \
     libgstreamer-plugins-bad1.0-dev \
     libgstreamer-plugins-base1.0-dev \
@@ -120,4 +121,15 @@ dreambo-daemon --sim --headless --scene empty
 
 # Other built-in scene
 dreambo-daemon --sim --scene minimal
+```
+
+---
+
+## Launch Dreambo torsor Daemon
+
+```bash
+DREAMBO_DISABLE_AUDIO=1 dreambo-daemon
+
+#Or export it once for the session:
+export DREAMBO_DISABLE_AUDIO=1
 ```
