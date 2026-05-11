@@ -91,8 +91,8 @@ class Dreambo:
 
     def __init__(
         self,
-        robot_name: str = "reachy_mini",
-        host: str = "reachy-mini.local",
+        robot_name: str = "dreambo",
+        host: str = "dreambo.local",
         port: int = 8000,
         connection_mode: ConnectionMode = "auto",
         spawn_daemon: bool = False,
@@ -106,9 +106,9 @@ class Dreambo:
         """Initialize the Dreambo robot.
 
         Args:
-            robot_name (str): Name of the robot, defaults to "reachy_mini".
+            robot_name (str): Name of the robot, defaults to "dreambo".
             host (str): Hostname or IP of the daemon. Defaults to
-                "reachy-mini.local".  In ``"auto"`` mode (the default) the
+                "dreambo.local".  In ``"auto"`` mode (the default) the
                 client first tries ``localhost``; *host* is only used as a
                 fallback or when *connection_mode* is ``"network"``.
             port (int): Port of the daemon's FastAPI server. Defaults to 8000.
@@ -150,7 +150,6 @@ class Dreambo:
         self._media_released = False
         self._log_level = log_level
         self._media_backend = media_backend
-
         self.T_head_cam = np.eye(4)
         self.T_head_cam[:3, 3][:] = [0.0437, 0, 0.0512]
         self.T_head_cam[:3, :3] = np.array(
@@ -160,14 +159,12 @@ class Dreambo:
                 [0, -1, 0],
             ]
         )
-
         self.media_manager = self._configure_mediamanager(media_backend, log_level)
 
     def __del__(self) -> None:
-        """Destroy the Dreambo instance.
-
+        """
+        Destroy the Dreambo instance.
         The client is disconnected explicitly to avoid a thread pending issue.
-
         """
         if hasattr(self, "client"):
             self.client.disconnect()

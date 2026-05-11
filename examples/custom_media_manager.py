@@ -3,16 +3,15 @@
 When you need raw OpenCV camera access or sounddevice audio recording,
 the daemon must first release the hardware. This example shows how:
 
-1. Connect with ``media_backend="no_media"`` — this automatically tells
-   the daemon to release camera and audio hardware.
+1. Connect with ``media_backend="no_media"`` — this automatically tells the daemon to release camera and audio hardware.
 2. Use OpenCV to capture frames directly from the camera.
 3. Use sounddevice to record audio from the microphone.
-4. On exit (context manager ``__exit__``), media is automatically
-   re-acquired by the daemon.
+4. On exit (context manager ``__exit__``), media is automatically re-acquired by the daemon.
 
 Note:
-    Requires: pip install opencv-python sounddevice soundfile
-
+    Requires:
+    - sudo apt install libportaudio2
+    - uv pip install opencv-python sounddevice soundfile
 """
 
 # START doc_example
@@ -35,7 +34,6 @@ except ImportError:
     sys.exit(1)
 
 import numpy as np
-
 from dreambo import Dreambo
 
 
@@ -44,7 +42,6 @@ def main() -> None:
     # media_backend="no_media" automatically releases daemon media hardware
     with Dreambo(media_backend="no_media") as mini:
         print(f"Connected. media_released={mini.media_released}")
-
         # --- OpenCV camera capture ---
         print("\nOpening camera with OpenCV...")
         cap = cv2.VideoCapture(0)
