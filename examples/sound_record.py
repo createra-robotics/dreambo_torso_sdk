@@ -1,20 +1,39 @@
-"""Reachy Mini sound recording example.
+"""Dreambo sound recording example.
 
-The output audio will be saved to 'recorded_audio.wav'.
+The output audio will be saved to 'recorded_audio.wav' in the current
+working directory (i.e. wherever you launched the script from, not the
+examples/ folder).
+
+Playback (after recording):
+
+    sudo apt install pulseaudio-utils
+
+    # PipeWire / PulseAudio — recommended, routes through your normal audio stack
+    paplay recorded_audio.wav
+
+    # ALSA — bypasses session audio, uses the kernel ALSA layer directly
+    aplay recorded_audio.wav
+
+    # GStreamer — useful if the file's format is non-standard
+    gst-play-1.0 recorded_audio.wav
+
+    # Full media player with controls
+    mpv recorded_audio.wav
+    # or
+    ffplay -autoexit recorded_audio.wav
+
+    # Open in the desktop's default audio app
+    xdg-open recorded_audio.wav
 """
-
-# START doc_example
 
 import argparse
 import time
-
 import numpy as np
-
 from dreambo import Dreambo
 from dreambo.media.audio_utils import save_audio_to_wav
 
-TIMEOUT = 1
-DURATION = 5  # seconds
+TIMEOUT = 10
+DURATION = 10  # seconds
 OUTPUT_FILE = "recorded_audio.wav"
 
 
@@ -58,7 +77,7 @@ def main(backend: str) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Records audio from Reachy Mini's microphone."
+        description="Records audio from Dreambo's microphone."
     )
     parser.add_argument(
         "--backend",
