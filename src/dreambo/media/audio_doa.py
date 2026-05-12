@@ -18,6 +18,8 @@ Note:
 import logging
 from typing import Optional
 
+import usb.core
+
 from dreambo.media.audio_control_utils import ReSpeaker, init_respeaker_usb
 
 logger = logging.getLogger(__name__)
@@ -44,19 +46,41 @@ class AudioDoA:
     def __init__(self) -> None:
         """Initialize the DoA helper, probing for a ReSpeaker USB device."""
         self._respeaker: Optional[ReSpeaker] = init_respeaker_usb()
+        # Some XU316 ReSpeaker Lite firmwares STALL the XVF DoA control
+        # transfer because they use a different vendor-tuning protocol than
+        # the XVF3800 firmware this SDK was authored against. Track that
+        # state so we stop hammering the device once we know it can't answer.
+        self._doa_unsupported: bool = False
 
     def get_DoA(self) -> tuple[float, bool] | None:
         """Read the current Direction of Arrival from the ReSpeaker.
 
         Returns:
             A tuple ``(angle_radians, speech_detected)`` or ``None`` when
-            the device is not available or the read fails.
+            the device is not available, the firmware does not expose DoA,
+            or the read fails.
 
         """
-        if not self._respeaker:
+        if not self._respeaker or self._doa_unsupported:
             return None
 
-        result = self._respeaker.read("DOA_VALUE_RADIANS")
+        try:
+            result = self._respeaker.read("DOA_VALUE_RADIANS")
+        except usb.core.USBError as e:
+            # ERRNO 32 == LIBUSB_ERROR_PIPE (device STALLed the request) =>
+            # firmware doesn't speak the XVF tuning protocol the dreambo
+            # SDK expects. Latch the flag so we don't spam the bus.
+            self._doa_unsupported = True
+            logging.getLogger(__name__).warning(
+                "ReSpeaker firmware rejected the DoA vendor request "
+                "(%s). Disabling DoA on this device.", e
+            )
+            return None
+        except ValueError:
+            # Read protocol error (unknown status byte). Treat the same way.
+            self._doa_unsupported = True
+            return None
+
         if result is None:
             return None
         return float(result[0]), bool(result[1])
