@@ -510,7 +510,9 @@ def init_respeaker_usb() -> Optional[ReSpeaker]:
         This function attempts to initialize a ReSpeaker microphone array by
         searching for USB devices with known Vendor and Product IDs. It tries:
         1. New Reachy Mini Audio firmware (0x38FB:0x1001) - preferred
-        2. Old ReSpeaker firmware (0x2886:0x001A) - with warning to update
+        2. ReSpeaker Lite (XMOS XU316) composite audio+DFU firmware
+           (0x2886:0x0019)
+        3. Old ReSpeaker firmware (0x2886:0x001A) - with warning to update
 
         The function handles USB backend errors gracefully and returns
         None if no compatible device is found or if initialization fails.
@@ -532,12 +534,18 @@ def init_respeaker_usb() -> Optional[ReSpeaker]:
 
     """
     try:
-        # Try new firmware first
+        # Try new Reachy Mini Audio firmware first
         dev = usb.core.find(
             idVendor=0x38FB, idProduct=0x1001, backend=get_libusb1_backend()
         )
 
-        # If not found, try old firmware
+        # Then try ReSpeaker Lite (XMOS XU316) composite audio + DFU firmware
+        if dev is None:
+            dev = usb.core.find(
+                idVendor=0x2886, idProduct=0x0019, backend=get_libusb1_backend()
+            )
+
+        # Finally try old ReSpeaker firmware
         if dev is None:
             dev = usb.core.find(
                 idVendor=0x2886, idProduct=0x001A, backend=get_libusb1_backend()

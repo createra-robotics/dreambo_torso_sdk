@@ -33,10 +33,8 @@ from gi.repository import Gst  # noqa: E402
 _logger = logging.getLogger(__name__)
 
 # Default camera name priority order used by ``find_video_device``.
-DEFAULT_CAM_NAMES: Sequence[str] = ("Reachy", "Arducam_12MP", "imx708")
-
-# Default target name for audio device detection.
-DEFAULT_AUDIO_TARGET: str = "Reachy Mini Audio"
+DEFAULT_CAM_NAMES: Sequence[str] = ("Arducam_12MP", "imx708")
+DEFAULT_AUDIO_TARGET: Tuple[str, ...] = ("ReSpeaker",)
 
 
 @dataclass
@@ -279,13 +277,13 @@ def find_audio_device(
     devices: List[DeviceInfo],
     device_type: str,
     current_platform: str | None = None,
-    target_name: str = DEFAULT_AUDIO_TARGET,
+    target_name: str | Sequence[str] = DEFAULT_AUDIO_TARGET,
 ) -> Optional[str]:
     """Find the Reachy Mini audio device identifier from a device list.
 
     Iterates *devices* looking for one whose :attr:`DeviceInfo.display_name`
-    contains *target_name*.  Monitor and loopback sources are skipped.
-    The returned identifier is platform-specific:
+    contains any of the substrings in *target_name*.  Monitor and loopback
+    sources are skipped.  The returned identifier is platform-specific:
 
     * **PipeWire** — ``node.name`` property.
     * **Windows WASAPI** — ``device.id`` property (non-loopback).
@@ -301,7 +299,9 @@ def find_audio_device(
         current_platform: Value of :func:`platform.system` (e.g.
             ``"Linux"``, ``"Windows"``, ``"Darwin"``).  Defaults to the
             current host platform when ``None``.
-        target_name: Substring to match in display names.
+        target_name: A single substring or a sequence of substrings to match
+            against display names.  The first device whose display_name
+            contains any one of them wins.
 
     Returns:
         The platform-specific device identifier, or ``None`` if no
@@ -311,8 +311,12 @@ def find_audio_device(
     if current_platform is None:
         current_platform = platform.system()
 
+    targets: Tuple[str, ...] = (
+        (target_name,) if isinstance(target_name, str) else tuple(target_name)
+    )
+
     for device in devices:
-        if target_name not in device.display_name:
+        if not any(t in device.display_name for t in targets):
             continue
 
         props = device.properties
@@ -375,7 +379,9 @@ def find_audio_device(
                     )
                     return device_id
 
-    _logger.warning("No %s %s card found.", target_name, device_type)
+    _logger.warning(
+        "No %s %s card found.", "/".join(targets), device_type
+    )
     return None
 
 
