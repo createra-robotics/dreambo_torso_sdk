@@ -33,10 +33,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install system dependencies
-        uses: awalsh128/cache-apt-pkgs-action@acb598e5ddbc6f68a970c5da0688d2f3a9f04d05  # v1.6.0
-        with:
-          packages: libcairo2-dev libgirepository-2.0-dev python3-gi python3-gi-cairo gstreamer1.0-plugins-base gstreamer1.0-plugins-good gir1.2-gst-plugins-base-1.0
-          version: 1.0
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libcairo2-dev libgirepository-2.0-dev libglib2.0-dev \
+            python3-gi python3-gi-cairo \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good gir1.2-gst-plugins-base-1.0
+          pkg-config --modversion girepository-2.0   # fail loud if the .pc file isn't where we expect
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       - name: Install uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
@@ -53,10 +56,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install system dependencies
-        uses: awalsh128/cache-apt-pkgs-action@acb598e5ddbc6f68a970c5da0688d2f3a9f04d05  # v1.6.0
-        with:
-          packages: libportaudio2 libcairo2-dev libgirepository-2.0-dev
-          version: 1.0
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libportaudio2 libcairo2-dev libgirepository-2.0-dev libglib2.0-dev
+          pkg-config --modversion girepository-2.0
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       - name: Install uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
