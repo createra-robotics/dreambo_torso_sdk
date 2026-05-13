@@ -6,7 +6,7 @@ import time
 from typing import List
 
 import serial.tools.list_ports
-from servocom import Xl330PyController
+from servocom import Sm40BlPyController
 
 SERIAL_TIMEOUT = 0.01
 COMMANDS_BITS_LENGTH = {
@@ -14,22 +14,24 @@ COMMANDS_BITS_LENGTH = {
     "Read": (14 + 15) * 10,
     "Write": (16 + 11) * 10,
 }
-XL_BAUDRATE_CONV_TABLE = {
-    9600: 0,
-    57600: 1,
-    115200: 2,
-    1000000: 3,
-    2000000: 4,
-    3000000: 5,
-    4000000: 6,
+# FeeTech STS/SM control-table baudrate enum (SM40BL arms + STS3025BL nose).
+BAUDRATE_CONV_TABLE = {
+    1000000: 0,
+    500000: 1,
+    250000: 2,
+    128000: 3,
+    115200: 4,
+    76800: 5,
+    57600: 6,
+    38400: 7,
 }
 
-
+# VID: 1a86 | PID: 55d3 is CH343 USB to Serial
 def find_serial_port(
     wireless_version: bool = False,
     vid: str = "1a86",
     pid: str = "55d3",
-    pi_uart: str = "/dev/ttyAMA3",
+    pi_uart: str = "/dev/serial/by-id/usb-1a86_USB_Single_Serial_5B79034031-if00",
 ) -> list[str]:
     """Replicate from the daemon.utils.find_serial_port function."""
     # If it's a wireless version, we should use the Raspberry Pi UART
@@ -38,18 +40,17 @@ def find_serial_port(
 
     # If it's a lite version, we should find it using the VID and PID
     ports = serial.tools.list_ports.comports()
-
     vid = vid.upper()
     pid = pid.upper()
-
     return [p.device for p in ports if f"USB VID:PID={vid}:{pid}" in p.hwid]
 
 
 def scan(port: str, baudrate: int) -> List[int]:
     """Scan the bus at the given baudrate and return detected IDs."""
     found_motors: list[int] = []
+    controller = None
     try:
-        controller = Xl330PyController(
+        controller = Sm40BlPyController(
             port,
             baudrate,
             float(SERIAL_TIMEOUT) + float(COMMANDS_BITS_LENGTH["Ping"]) / baudrate,
@@ -89,7 +90,7 @@ def main() -> None:
     parser.add_argument(
         "--wireless",
         action="store_true",
-        help="Use the wireless version of Reachy Mini (Raspberry Pi UART).",
+        help="Use the wireless version of the Dreambo torso (Raspberry Pi UART).",
     )
     args = parser.parse_args()
 
@@ -104,7 +105,7 @@ def main() -> None:
             return
         port = ports[0]
 
-    for baudrate in XL_BAUDRATE_CONV_TABLE.keys():
+    for baudrate in BAUDRATE_CONV_TABLE.keys():
         print(f"Trying baudrate: {baudrate}")
         found_motors = scan(port, baudrate)
         if found_motors:

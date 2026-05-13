@@ -16,8 +16,7 @@ from setup_motor import (
     run,
 )
 
-assets_root_path = "../src/reachy_mini/assets/"
-
+assets_root_path = "../src/dreambo_torso/assets/"
 
 UART_PORT = "/dev/ttyAMA3"
 CONFIG_FILE_PATH = os.path.join(assets_root_path, "config", "hardware_config.yaml")
@@ -88,7 +87,7 @@ def main() -> None:
         elif lookup_for_motor(UART_PORT, current_channel + 10, 1000000, silent=True):
             print(f"Motor on channel {current_channel} already set up.")
             # light_led_up(UART_PORT, current_channel+10, 1000000)
-            light_led_down(UART_PORT, current_channel + 10, 1000000)
+            # light_led_down(UART_PORT, current_channel + 10, 1000000)
             args = argparse.Namespace(
                 config_file=CONFIG_FILE_PATH,
                 motor_name=target_name,

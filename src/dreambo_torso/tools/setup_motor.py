@@ -1,21 +1,42 @@
 """Motor setup script for the Dreambo torso.
 
-This script allows to configure the motors of the Dreambo torso by setting their ID, baudrate, offset, angle limits, return delay time, and removing the input voltage error.
+This script allows to configure the motors of the Dreambo Torso by setting their ID, baudrate, offset, angle limits, return delay time, and removing the input voltage error.
 
 The motor needs to be configured one by one, so you will need to connect only one motor at a time to the serial port. You can specify which motor to configure by passing its name as an argument.
 
 If not specified, it assumes the motor is in the factory settings (ID 1 and baudrate 1000000). If it's not the case, you will need to use a tool like FeeTech Debug Tool to first reset it or manually specify the ID and baudrate.
 
 Please note that all values given in the configuration file are in the motor's raw units.
+
+Usage:
+
+    # Most common case: motor is already configured, push YAML values into EEPROM.
+    python -m dreambo_torso.tools.setup_motor left_arm_pitch --update-config
+
+    # Brand-new motor (factory defaults). Same command, no --update-config.
+    python -m dreambo_torso.tools.setup_motor left_arm_pitch
+
+    # Override the config path or serial port (rarely needed).
+    python -m dreambo_torso.tools.setup_motor nose_top -c /path/to/cfg.yaml -p /dev/ttyUSB0
+
+The serial port is auto-detected by USB VID/PID (CH343: 1a86:55d3); pass
+``--wireless`` to use the Raspberry Pi UART path instead.
 """
 
 import argparse
+import sys
 import time
 from pathlib import Path
 
 from servocom import Sm40BlPyController, Sts3025BlPyController
 
+from dreambo_torso import __file__ as _dt_init
+from dreambo_torso.tools.scan_motors import find_serial_port
 from dreambo_torso.utils.hardware_config.parser import MotorConfig, parse_yaml_config
+
+DEFAULT_CONFIG = (
+    Path(_dt_init).parent / "assets" / "config" / "hardware_config.yaml"
+)
 
 FACTORY_DEFAULT_ID = 1
 FACTORY_DEFAULT_BAUDRATE = 1000000
@@ -485,11 +506,6 @@ if __name__ == "__main__":
     """Entry point for the Dreambo torso motor configuration tool."""
     parser = argparse.ArgumentParser(description="Motor Configuration tool")
     parser.add_argument(
-        "config_file",
-        type=Path,
-        help="Path to the hardware configuration file (default: hardware_config.yaml).",
-    )
-    parser.add_argument(
         "motor_name",
         type=str,
         help="Name of the motor to configure.",
@@ -505,9 +521,25 @@ if __name__ == "__main__":
         ],
     )
     parser.add_argument(
-        "serialport",
+        "-c",
+        "--config",
+        dest="config_file",
+        type=Path,
+        default=DEFAULT_CONFIG,
+        help=f"Path to the hardware configuration file (default: {DEFAULT_CONFIG}).",
+    )
+    parser.add_argument(
+        "-p",
+        "--port",
+        dest="serialport",
         type=str,
-        help="Serial port for communication with the motor.",
+        default=None,
+        help="Serial port (auto-detected by USB VID/PID 1a86:55d3 if omitted).",
+    )
+    parser.add_argument(
+        "--wireless",
+        action="store_true",
+        help="Use the Raspberry Pi UART instead of USB-RS485 (Dreambo wireless version).",
     )
     parser.add_argument(
         "--check-only",
@@ -532,4 +564,17 @@ if __name__ == "__main__":
         help="Update a specific motor (assumes it already has the correct id and baudrate).",
     )
     args = parser.parse_args()
+
+    if args.serialport is None:
+        ports = find_serial_port(wireless_version=args.wireless)
+        if not ports:
+            print(
+                "[FAIL] No serial port found via VID:PID lookup. "
+                "Check USB connection and permissions, pass --wireless for "
+                "the Pi UART, or specify --port explicitly."
+            )
+            sys.exit(1)
+        args.serialport = ports[0]
+        print(f"Using serial port: {args.serialport}")
+
     run(args)
