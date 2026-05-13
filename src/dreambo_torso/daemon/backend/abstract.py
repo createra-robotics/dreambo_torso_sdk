@@ -17,9 +17,11 @@ import typing
 from abc import abstractmethod
 from pathlib import Path
 from typing import Annotated, Any, Callable, Dict, Optional
+
 import numpy as np
 from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation as R
+
 from dreambo_torso.io.protocol import (
     AnyCommand,
     AppendRecordCmd,

@@ -1,1 +1,1 @@
-"""Daemon for Dreambo Torso"""
+"""Daemon for Dreambo Torso."""

@@ -1,7 +1,9 @@
 """Demonstrate how to take a picture with Dreambo.
+
 Note:
     This example requires the OpenCV optional dependency.
     Install with: pip install reachy_mini[opencv]
+
 """
 
 # START doc_example

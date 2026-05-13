@@ -5,8 +5,10 @@ This module provides endpoints to check for updates, start updates, and monitor 
 
 import logging
 import threading
+
 import requests
 from fastapi import APIRouter, HTTPException, WebSocket
+
 from dreambo_torso.daemon.app import bg_job_register
 from dreambo_torso.daemon.app.bg_job_register import JobInfo
 from dreambo_torso.utils.wireless_version.update import update_dreambo

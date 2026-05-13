@@ -12,6 +12,7 @@ Note:
     Requires:
     - sudo apt install libportaudio2
     - uv pip install opencv-python sounddevice soundfile
+
 """
 
 # START doc_example
@@ -34,6 +35,7 @@ except ImportError:
     sys.exit(1)
 
 import numpy as np
+
 from dreambo_torso import Dreambo
 
 

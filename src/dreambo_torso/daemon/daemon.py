@@ -1,4 +1,4 @@
-"""Daemon for Dreambo Torso
+"""Daemon for Dreambo Torso.
 
 This module provides a daemon that runs a backend for either a simulated Dreambo using Mujoco or a real Dreambo robot using a serial connection.
 It includes methods to start, stop, and restart the daemon, as well as to check its status.
@@ -32,6 +32,7 @@ _central_relay_task: Optional[asyncio.Task[Any]] = None
 
 class Daemon:
     """Daemon for simulated or real Dreambo robot.
+
     Runs the server with the appropriate backend (Mujoco for simulation or RobotBackend for real hardware).
     """
 
@@ -44,7 +45,6 @@ class Daemon:
         no_media: bool = False,
         sim_mode: SimulationMode = SimulationMode.NONE,
     ) -> None:
-
         """Initialize the Dreambo daemon."""
         self.log_level = log_level
         self.logger = logging.getLogger(__name__)

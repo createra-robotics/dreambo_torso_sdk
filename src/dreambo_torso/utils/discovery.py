@@ -1,4 +1,4 @@
-"""mDNS service registration and discovery for Dreambo robot"""
+"""mDNS service registration and discovery for Dreambo robot."""
 
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ SERVICE_TYPE = "_dreambo._tcp.local."
 @dataclass
 class DiscoveredRobot:
     """A Dreambo robot discovered via mDNS."""
+
     name: str
     host: str
     port: int

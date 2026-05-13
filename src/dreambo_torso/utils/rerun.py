@@ -19,9 +19,9 @@ import numpy as np
 import requests
 import rerun as rr
 
+from dreambo_torso.dreambo_torso import Dreambo
 from dreambo_torso.kinematics.placo_kinematics import PlacoKinematics
 from dreambo_torso.media.media_manager import MediaBackend
-from dreambo_torso.dreambo_torso import Dreambo
 
 
 class Rerun:

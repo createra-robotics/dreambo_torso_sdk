@@ -3,8 +3,10 @@
 import argparse
 from importlib.resources import files
 from typing import Optional
+
 import questionary
 from rich.console import Console
+
 import dreambo_torso
 from dreambo_torso.daemon.utils import find_serial_port
 from dreambo_torso.tools.setup_motor import (

@@ -5,6 +5,7 @@ import struct
 import subprocess
 import time
 from enum import Enum
+
 import psutil
 import serial.tools.list_ports
 

@@ -1,4 +1,4 @@
-"""Record a hand-puppeteered trajectory in the Dreambo robot emotions/dances format.
+r"""Record a hand-puppeteered trajectory in the Dreambo robot emotions/dances format.
 
 Puts Dreambo robot into compliant (gravity-compensated) mode so you can physically
 pose the head by hand, polls the live head pose + antenna joints + body yaw at a
@@ -30,6 +30,7 @@ import json
 import time
 from pathlib import Path
 from typing import Any
+
 from dreambo_torso import Dreambo
 
 

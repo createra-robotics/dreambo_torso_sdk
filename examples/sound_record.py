@@ -28,7 +28,9 @@ Playback (after recording):
 
 import argparse
 import time
+
 import numpy as np
+
 from dreambo_torso import Dreambo
 from dreambo_torso.media.audio_utils import save_audio_to_wav
 

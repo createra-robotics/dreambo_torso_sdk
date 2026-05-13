@@ -13,7 +13,12 @@ from uuid import UUID
 import numpy as np
 import numpy.typing as npt
 
-from dreambo_torso.io.protocol import AnyCommand, AnyTaskRequest, DaemonStatus, ImuDataMsg
+from dreambo_torso.io.protocol import (
+    AnyCommand,
+    AnyTaskRequest,
+    DaemonStatus,
+    ImuDataMsg,
+)
 
 
 class AbstractServer(ABC):

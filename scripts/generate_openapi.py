@@ -27,6 +27,7 @@ script never touches motors, serial ports, or audio devices.
 
 import json
 from pathlib import Path
+
 from dreambo_torso.daemon.app.main import Args, create_app
 
 OUTPUT_PATH = (

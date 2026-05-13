@@ -1,3 +1,5 @@
+"""Minimal getting-started example: connect to Dreambo and look up."""
+
 from dreambo_torso import Dreambo
 from dreambo_torso.utils import create_head_pose
 

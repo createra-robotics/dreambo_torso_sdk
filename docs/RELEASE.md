@@ -18,7 +18,7 @@ Under the hood, the install script runs `uv tool install dreambo-torso`, drops a
 ## 1. What is already in place
 
 - **Package metadata** — `pyproject.toml` declares `name = "dreambo-torso"` (PyPI distribution name, hyphenated) and the console script `dreambo-torso-daemon = "dreambo_torso.daemon.app.main:main"` (the import package uses underscores). After install, the binary is on `PATH`.
-- **Publish workflow** — `.github/workflows/wheels.yml` fires on GitHub Release creation, builds an sdist + wheel, and publishes to PyPI via **trusted publishing** (OIDC, no API token).
+- **Publish workflow** — `.github/workflows/wheels.yml` fires on any pushed tag matching `v*`, builds an sdist + wheel, and publishes to PyPI via **trusted publishing** (OIDC, no API token). No GitHub Release ceremony required — the tag *is* the release trigger.
 
 What is missing is: PyPI project setup, a stable version-bump policy, public availability of in-house dependencies, and a Pi bootstrap script.
 
@@ -60,16 +60,23 @@ Several deps in `pyproject.toml` look in-house. Confirm each is on PyPI, or publ
 
 ```bash
 git tag v1.0.1
-git push --tags
-gh release create v1.0.1 --generate-notes
+git push origin v1.0.1
 ```
 
-`wheels.yml` builds and uploads within ~2 minutes. Verify with:
+That single tag push triggers `wheels.yml`, which builds and uploads to PyPI within ~2 minutes. Verify with:
 
 ```bash
 uv tool install dreambo-torso==1.0.1
 dreambo-torso-daemon --help
 ```
+
+If you also want a GitHub Release (changelog UI, release-notes page), create one manually after publish:
+
+```bash
+gh release create v1.0.1 --generate-notes
+```
+
+This is purely cosmetic — it does *not* re-trigger the publish workflow.
 
 ---
 
@@ -175,7 +182,7 @@ For reproducible installs, bootstrap should pin a version (`uv tool install drea
 - [ ] `pyproject.toml` version is bumped (or `setuptools-scm` is configured).
 - [ ] `CHANGELOG` (if any) updated.
 - [ ] PyPI trusted publisher is configured for the repo + workflow.
-- [ ] `git tag vX.Y.Z && git push --tags`
-- [ ] `gh release create vX.Y.Z --generate-notes`
+- [ ] `git tag vX.Y.Z && git push origin vX.Y.Z`  *(this triggers wheels.yml automatically)*
+- [ ] *(optional)* `gh release create vX.Y.Z --generate-notes` for a release-notes page
 - [ ] Wheel appears on PyPI (`pip index versions dreambo-torso` or check the project page).
 - [ ] Smoke test: on a clean Pi, run `install.sh`, verify `systemctl --user status dreambo-torso-daemon` is `active (running)`.

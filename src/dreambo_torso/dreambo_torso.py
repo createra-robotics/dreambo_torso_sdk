@@ -162,8 +162,8 @@ class Dreambo:
         self.media_manager = self._configure_mediamanager(media_backend, log_level)
 
     def __del__(self) -> None:
-        """
-        Destroy the Dreambo instance.
+        """Destroy the Dreambo instance.
+
         The client is disconnected explicitly to avoid a thread pending issue.
         """
         if hasattr(self, "client"):

@@ -881,13 +881,13 @@ dependencies = [
 all = [
     { name = "cv2-enumerate-cameras" },
     { name = "gpiozero", marker = "sys_platform == 'linux'" },
+    { name = "imu-bmi088", marker = "sys_platform == 'linux'" },
     { name = "lgpio", marker = "sys_platform == 'linux'" },
     { name = "mujoco" },
     { name = "nmcli", marker = "sys_platform == 'linux'" },
     { name = "onnxruntime" },
     { name = "opencv-python" },
     { name = "placo", marker = "sys_platform != 'win32'" },
-    { name = "pollen-bmi088-imu-library", marker = "sys_platform == 'linux'" },
     { name = "pynput" },
     { name = "rerun-sdk" },
     { name = "semver" },
@@ -917,9 +917,9 @@ rerun = [
 ]
 wireless-version = [
     { name = "gpiozero", marker = "sys_platform == 'linux'" },
+    { name = "imu-bmi088", marker = "sys_platform == 'linux'" },
     { name = "lgpio", marker = "sys_platform == 'linux'" },
     { name = "nmcli", marker = "sys_platform == 'linux'" },
-    { name = "pollen-bmi088-imu-library", marker = "sys_platform == 'linux'" },
     { name = "semver" },
 ]
 
@@ -955,6 +955,7 @@ requires-dist = [
     { name = "gpiozero", marker = "sys_platform == 'linux' and extra == 'wireless-version'", specifier = ">=2.0.0" },
     { name = "gstreamer-bundle", marker = "sys_platform != 'linux'", specifier = "==1.28.1" },
     { name = "huggingface-hub", specifier = "==1.3.0" },
+    { name = "imu-bmi088", marker = "sys_platform == 'linux' and extra == 'wireless-version'", specifier = ">=1.0.1" },
     { name = "jinja2" },
     { name = "lgpio", marker = "sys_platform == 'linux' and extra == 'wireless-version'", specifier = ">=0.2.2.0" },
     { name = "libusb-package", specifier = ">=1.0.26.3" },
@@ -968,7 +969,6 @@ requires-dist = [
     { name = "opencv-python", marker = "extra == 'opencv'", specifier = "<=5.0" },
     { name = "pip", specifier = ">=25" },
     { name = "placo", marker = "sys_platform != 'win32' and extra == 'placo-kinematics'", specifier = "==0.9.14" },
-    { name = "pollen-bmi088-imu-library", marker = "sys_platform == 'linux' and extra == 'wireless-version'" },
     { name = "psutil" },
     { name = "pulsectl", marker = "sys_platform == 'linux'", specifier = ">=24.1.0" },
     { name = "pycairo", specifier = ">=1.29.0" },
@@ -1792,6 +1792,20 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/e4/06/b56dfa750b44e86157093bc8fca0ab81dccbf5260510de4eaf1cb69b5b99/importlib_resources-7.1.0.tar.gz", hash = "sha256:0722d4c6212489c530f2a145a34c0a7a3b4721bc96a15fada5930e2a0b760708", size = 44985, upload-time = "2026-04-12T16:36:09.232Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8a/db/55a262f3606bebcae07cc14095338471ad7c0bbcaa37707e6f0ee49725b7/importlib_resources-7.1.0-py3-none-any.whl", hash = "sha256:1bd7b48b4088eddb2cd16382150bb515af0bd2c70128194392725f82ad2c96a1", size = 37232, upload-time = "2026-04-12T16:36:08.219Z" },
+]
+
+[[package]]
+name = "imu-bmi088"
+version = "1.0.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "ahrs" },
+    { name = "numpy" },
+    { name = "smbus3" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/04/f9/fcd672a7a27025c976157e2ab43d57670147a4fcf98ca560e599f5d9aca5/imu_bmi088-1.0.1.tar.gz", hash = "sha256:943535ecda8aa58c9931ee1bd41f0c5c1fcc44d777572ef5c1b0daf11858387c", size = 10807, upload-time = "2026-05-13T05:34:29.869Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/67/76/3c2e55581c93eba7d7c0bd0429dbc5728b7b9810f745dd1b29f0e0426563/imu_bmi088-1.0.1-py3-none-any.whl", hash = "sha256:440b0a984432c1977190af997df899f10fd9c4b9b6f394f9703727a30d10737e", size = 10197, upload-time = "2026-05-13T05:34:28.279Z" },
 ]
 
 [[package]]
@@ -2832,20 +2846,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/f9/e2/3e91f31a7d2b083fe6ef3fa267035b518369d9511ffab804f839851d2779/pluggy-1.6.0.tar.gz", hash = "sha256:7dcc130b76258d33b90f61b658791dede3486c3e6bfb003ee5c9bfb396dd22f3", size = 69412, upload-time = "2025-05-15T12:30:07.975Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/54/20/4d324d65cc6d9205fabedc306948156824eb9f0ee1633355a8f7ec5c66bf/pluggy-1.6.0-py3-none-any.whl", hash = "sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746", size = 20538, upload-time = "2025-05-15T12:30:06.134Z" },
-]
-
-[[package]]
-name = "pollen-bmi088-imu-library"
-version = "1.0.0rc1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "ahrs" },
-    { name = "numpy" },
-    { name = "smbus3" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/64/ca/f74143ec89fbc502c7d9fc6a4d20a7f56fad822389716daee5e2bfe9e364/pollen_bmi088_imu_library-1.0.0rc1.tar.gz", hash = "sha256:6a82eafa448807a87c7a9e1ed8ef395b0ce5f2f57fa536b5b3a3f428e72d8fcf", size = 3273, upload-time = "2025-10-30T08:57:43.422Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/eb/0a/86991b5db3acb88bbe83ba1e586c1c401830c8dc3b95cb6e0637e60cd26d/pollen_bmi088_imu_library-1.0.0rc1-py3-none-any.whl", hash = "sha256:d13e7297a3042879c36b48f78c6d0e8426af2c5ca31efe312003c7cf74b657c8", size = 3748, upload-time = "2025-10-30T08:57:42.136Z" },
 ]
 
 [[package]]

@@ -18,7 +18,9 @@ from datetime import datetime
 from enum import Enum
 from typing import Annotated, Any, Literal, Optional
 from uuid import UUID
+
 from pydantic import BaseModel, Field, TypeAdapter
+
 from dreambo_torso.utils.interpolation import InterpolationTechnique
 
 # ------------------------------------------------------------------
@@ -28,6 +30,7 @@ from dreambo_torso.utils.interpolation import InterpolationTechnique
 
 class MotorControlMode(str, Enum):
     """Enum for motor control modes."""
+
     Enabled = "enabled"
     Disabled = "disabled"
     GravityCompensation = "gravity_compensation"
@@ -35,6 +38,7 @@ class MotorControlMode(str, Enum):
 
 class DaemonState(str, Enum):
     """Enum representing the state of the Dreambo robot daemon."""
+
     NOT_INITIALIZED = "not_initialized"
     STARTING = "starting"
     RUNNING = "running"
@@ -48,6 +52,7 @@ class DaemonState(str, Enum):
 # ------------------------------------------------------------------
 class RobotBackendStatus(BaseModel):
     """Status of the Robot Backend."""
+
     ready: bool
     motor_control_mode: MotorControlMode
     last_alive: float | None

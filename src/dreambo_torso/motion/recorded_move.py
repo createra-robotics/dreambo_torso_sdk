@@ -5,10 +5,12 @@ import os
 from glob import glob
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
 import numpy as np
 import numpy.typing as npt
 from huggingface_hub import snapshot_download
 from huggingface_hub.errors import LocalEntryNotFoundError
+
 from dreambo_torso.motion.move import Move
 from dreambo_torso.utils.interpolation import linear_pose_interpolation
 

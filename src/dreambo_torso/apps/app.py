@@ -16,9 +16,11 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlparse
+
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+
 from dreambo_torso.dreambo_torso import Dreambo
 
 
@@ -283,7 +285,9 @@ def main() -> None:
     console = Console()
     if args.command == "create":
         if args.template == "conversation":
-            from dreambo_torso.apps.fork_conversation import create_from_conversation_app
+            from dreambo_torso.apps.fork_conversation import (
+                create_from_conversation_app,
+            )
 
             created_path = create_from_conversation_app(
                 console, args.app_name, args.path

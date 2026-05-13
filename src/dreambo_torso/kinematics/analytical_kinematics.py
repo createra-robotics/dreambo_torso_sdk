@@ -10,8 +10,8 @@ from importlib.resources import files
 from typing import Annotated
 
 import numpy as np
-from numpy.typing import NDArray
 from dreambo_torso_kinematics import DreamboTorsoKinematics
+from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation as R
 
 import dreambo_torso

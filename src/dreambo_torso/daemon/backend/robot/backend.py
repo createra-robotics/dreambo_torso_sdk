@@ -136,6 +136,7 @@ class RobotBackend(Backend):
 
     def run(self) -> None:
         """Run the control loop for the robot backend.
+
         This method continuously updates the motor controller at a specified frequency.
         It reads the joint positions, updates the motor controller, and publishes the joint positions.
         It also handles errors and retries if the motor controller is not responding.
@@ -385,6 +386,7 @@ class RobotBackend(Backend):
 
     def set_antennas_operation_mode(self, mode: int) -> None:
         """Change the operation mode of the antennas motors.
+
         Args:
             mode (int): The operation mode for the antennas motors (0: torque control, 3: position control, 5: current-based position control).
 
