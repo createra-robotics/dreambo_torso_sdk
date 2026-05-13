@@ -5,8 +5,8 @@ import time
 import numpy as np
 import pytest
 
-from dreambo.media.audio_utils import _process_card_number_output, save_audio_to_wav
-from dreambo.media.media_manager import MediaBackend, MediaManager
+from dreambo_torso.media.audio_utils import _process_card_number_output, save_audio_to_wav
+from dreambo_torso.media.media_manager import MediaBackend, MediaManager
 
 SIGNALING_HOST = "reachy-mini.local"
 

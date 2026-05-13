@@ -29,8 +29,8 @@ Playback (after recording):
 import argparse
 import time
 import numpy as np
-from dreambo import Dreambo
-from dreambo.media.audio_utils import save_audio_to_wav
+from dreambo_torso import Dreambo
+from dreambo_torso.media.audio_utils import save_audio_to_wav
 
 TIMEOUT = 10
 DURATION = 10  # seconds

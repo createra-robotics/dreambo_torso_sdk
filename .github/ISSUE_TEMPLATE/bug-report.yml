@@ -7,7 +7,7 @@ body:
       value: |
         ### Thanks for contributing to CreatEra! 🙌
         Please include as much detail as possible so we can help quickly.
-        **Before filing a ticket, you must read our [Troubleshooting Guide](https://createra.tech/robot/dreambo/troubleshooting).**
+        **Before filing a ticket, you must read our [Troubleshooting Guide](https://createra.tech/robot/dreambo_torso/troubleshooting).**
 
   - type: dropdown
     id: issue-type
@@ -75,7 +75,7 @@ body:
       label: Troubleshooting
       description: Confirm you reviewed the troubleshooting guide before opening this ticket.
       options:
-        - label: I have read https://createra.tech/robot/dreambo/troubleshooting
+        - label: I have read https://createra.tech/robot/dreambo_torso/troubleshooting
     validations:
       required: true
 

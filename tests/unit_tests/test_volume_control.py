@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from dreambo.daemon.app.routers.volume_control import VolumeControl, create_volume_control
+from dreambo_torso.daemon.app.routers.volume_control import VolumeControl, create_volume_control
 
 _LINUX_BACKENDS = ["pulsectl", "alsa"] if platform.system() == "Linux" else [None]
 
@@ -41,15 +41,15 @@ def test_factory_returns_correct_subclass(volume_control):
     assert isinstance(volume_control, VolumeControl)
 
     if system == "Darwin":
-        from dreambo.daemon.app.routers.volume_control_macos import VolumeControlMacOS
+        from dreambo_torso.daemon.app.routers.volume_control_macos import VolumeControlMacOS
 
         assert isinstance(volume_control, VolumeControlMacOS)
     elif system == "Linux":
-        from dreambo.daemon.app.routers.volume_control_linux import VolumeControlLinux
+        from dreambo_torso.daemon.app.routers.volume_control_linux import VolumeControlLinux
 
         assert isinstance(volume_control, VolumeControlLinux)
     elif system == "Windows":
-        from dreambo.daemon.app.routers.volume_control_windows import VolumeControlWindows
+        from dreambo_torso.daemon.app.routers.volume_control_windows import VolumeControlWindows
 
         assert isinstance(volume_control, VolumeControlWindows)
     else:

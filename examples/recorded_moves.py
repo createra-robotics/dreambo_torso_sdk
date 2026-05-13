@@ -11,8 +11,8 @@ python recorded_moves_example.py -l [dance, emotions]
 
 import argparse
 
-from dreambo import Dreambo
-from dreambo.motion.recorded_move import RecordedMove, RecordedMoves
+from dreambo_torso import Dreambo
+from dreambo_torso.motion.recorded_move import RecordedMove, RecordedMoves
 
 # Keep compatibility with the original library flag while allowing custom datasets.
 LIBRARY_DATASETS = {

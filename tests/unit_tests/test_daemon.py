@@ -5,9 +5,9 @@ import numpy as np
 import pytest
 import uvicorn
 
-from dreambo.daemon.app.main import Args, create_app
-from dreambo.daemon.daemon import Daemon
-from dreambo.dreambo import Dreambo
+from dreambo_torso.daemon.app.main import Args, create_app
+from dreambo_torso.daemon.daemon import Daemon
+from dreambo_torso.dreambo_torso import Dreambo
 
 
 async def _start_app_server(

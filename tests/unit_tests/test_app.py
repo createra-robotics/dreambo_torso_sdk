@@ -6,12 +6,12 @@ import time
 import pytest
 import uvicorn
 
-from dreambo import ReachyMiniApp
-from dreambo.apps import AppInfo, SourceKind
-from dreambo.apps.manager import AppManager, AppState
-from dreambo.daemon.app.main import Args, create_app
-from dreambo.daemon.daemon import Daemon
-from dreambo.dreambo import Dreambo
+from dreambo_torso import ReachyMiniApp
+from dreambo_torso.apps import AppInfo, SourceKind
+from dreambo_torso.apps.manager import AppManager, AppState
+from dreambo_torso.daemon.app.main import Args, create_app
+from dreambo_torso.daemon.daemon import Daemon
+from dreambo_torso.dreambo_torso import Dreambo
 
 
 @pytest.mark.asyncio

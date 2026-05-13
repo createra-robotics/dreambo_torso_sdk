@@ -13,7 +13,7 @@ import time
 import numpy as np
 import requests
 
-from dreambo import Dreambo
+from dreambo_torso import Dreambo
 
 
 def main() -> None:

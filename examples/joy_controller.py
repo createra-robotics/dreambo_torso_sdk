@@ -29,7 +29,7 @@ import numpy as np
 import pygame
 
 # Local application/library-specific imports
-from dreambo import Dreambo, utils
+from dreambo_torso import Dreambo, utils
 
 # --- Configuration ---
 CONTROL_LOOP_RATE = 0.02

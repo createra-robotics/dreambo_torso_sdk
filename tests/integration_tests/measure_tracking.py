@@ -30,8 +30,8 @@ import numpy as np
 from reachy_mini_dances_library.collection.dance import AVAILABLE_MOVES
 from scipy.spatial.transform import Rotation as R
 
-from dreambo import Dreambo, utils
-from dreambo.utils.interpolation import distance_between_poses
+from dreambo_torso import Dreambo, utils
+from dreambo_torso.utils.interpolation import distance_between_poses
 
 # ---------------- Configuration (tweak as needed) ----------------
 BPM: float = 120.0  # tempo for all moves

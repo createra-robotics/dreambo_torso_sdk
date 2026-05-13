@@ -10,9 +10,9 @@ motion of the head and antennas.
 
 import numpy as np
 
-from dreambo import Dreambo
-from dreambo.utils import create_head_pose
-from dreambo.utils.interpolation import InterpolationTechnique
+from dreambo_torso import Dreambo
+from dreambo_torso.utils import create_head_pose
+from dreambo_torso.utils.interpolation import InterpolationTechnique
 
 
 def main() -> None:

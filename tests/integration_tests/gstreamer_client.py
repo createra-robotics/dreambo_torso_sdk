@@ -32,8 +32,8 @@ import time
 from threading import Thread
 import gi
 
-from dreambo.daemon.utils import CAMERA_PIPE_NAME, CAMERA_SOCKET_PATH
-from dreambo.media.webrtc_utils import find_producer_peer_id_by_name
+from dreambo_torso.daemon.utils import CAMERA_PIPE_NAME, CAMERA_SOCKET_PATH
+from dreambo_torso.media.webrtc_utils import find_producer_peer_id_by_name
 
 gi.require_version("Gst", "1.0")
 from gi.repository import GLib, Gst  # noqa: E402
@@ -313,7 +313,7 @@ def command_sender_loop(consumer: GstConsumer) -> None:
 
     import numpy as np
 
-    from dreambo.utils import create_head_pose
+    from dreambo_torso.utils import create_head_pose
 
     freq = 0.25
     amp = 20.0
@@ -408,7 +408,7 @@ def main() -> None:
 
     server = None
     if args.start_server:
-        from dreambo.media.media_server import GstMediaServer
+        from dreambo_torso.media.media_server import GstMediaServer
 
         logging.basicConfig(
             level=logging.DEBUG,

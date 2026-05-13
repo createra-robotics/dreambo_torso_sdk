@@ -13,8 +13,8 @@ Requirements:
 import logging
 import time
 
-from dreambo import Dreambo
-from dreambo.utils.rerun import Rerun
+from dreambo_torso import Dreambo
+from dreambo_torso.utils.rerun import Rerun
 
 
 def main() -> None:

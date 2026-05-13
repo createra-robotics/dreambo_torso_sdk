@@ -10,7 +10,7 @@ This is useful for applications like human-robot interaction, where you want the
 
 import time
 
-from dreambo import Dreambo
+from dreambo_torso import Dreambo
 
 print(
     "This demo currently only works with Placo as the kinematics engine. Start the daemon with:\nreachy-mini-daemon --kinematics-engine Placo"

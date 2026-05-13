@@ -17,7 +17,7 @@ except ImportError:
     print("Install it with: pip install reachy_mini[opencv]")
     sys.exit(1)
 
-from dreambo import Dreambo
+from dreambo_torso import Dreambo
 
 
 def main(backend: str) -> None:

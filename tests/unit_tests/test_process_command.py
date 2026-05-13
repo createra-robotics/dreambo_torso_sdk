@@ -18,8 +18,8 @@ from typing import Any, Callable
 import numpy as np
 import pytest
 
-from dreambo.daemon.backend.mockup_sim.backend import MockupSimBackend
-from dreambo.io.protocol import GotoTargetCmd
+from dreambo_torso.daemon.backend.mockup_sim.backend import MockupSimBackend
+from dreambo_torso.io.protocol import GotoTargetCmd
 
 
 def _make_backend() -> MockupSimBackend:

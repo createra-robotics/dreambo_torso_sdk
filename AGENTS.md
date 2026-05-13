@@ -409,8 +409,6 @@ Read these files in `skills/` when you need detailed knowledge:
 
 ## Quick Reference
 
-**Motor names:** `body_rotation`, `stewart_1-6`, `right_antenna`, `left_antenna`
-
 **Interpolation methods:** `linear`, `minjerk` (default), `ease_in_out`, `cartoon`
 
 **Emotions library:**
@@ -421,10 +419,3 @@ mini.play_move(moves.get("happy"), initial_goto_duration=1.0)
 ```
 
 ---
-
-## Community
-
-- **App guide**: https://huggingface.co/blog/pollen-robotics/make-and-publish-your-reachy-mini-apps
-- **Source code**: https://github.com/pollen-robotics/reachy_mini
-- **Community apps**: https://huggingface.co/spaces?q=reachy_mini
-- **Discord**: https://discord.gg/Y7FgMqHsub

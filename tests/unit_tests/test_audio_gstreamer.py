@@ -2,7 +2,7 @@
 
 from typing import cast
 
-from dreambo.media.audio_gstreamer import GStreamerAudio
+from dreambo_torso.media.audio_gstreamer import GStreamerAudio
 
 
 def test_compute_playback_buffer_timing_starts_at_running_time() -> None:

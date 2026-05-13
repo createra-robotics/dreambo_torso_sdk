@@ -3,9 +3,9 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "dreambo"
+name = "dreambo-torso"
 version = "1.0.0"
-authors = [{ name = "Pollen Robotics", email = "contact@pollen-robotics.com" }]
+authors = [{ name = "CreatEra Robotics", email = "contact@createra.tech" }]
 description = ""
 readme = "README.md"
 requires-python = ">=3.10"
@@ -58,19 +58,19 @@ rerun = ["rerun-sdk>=0.29.0,<=0.31.3"]
 wireless-version = [
     "semver>=3,<4",
     "nmcli>=1.5; sys_platform == 'linux'",
-    "pollen_BMI088_imu_library; sys_platform == 'linux'",
+    "imu-bmi088>=1.0.1; sys_platform == 'linux'",
     "gpiozero>=2.0.0; sys_platform == 'linux'",
     "lgpio>=0.2.2.0; sys_platform == 'linux'",
 ]
 opencv = ["opencv-python<=5.0", "cv2_enumerate_cameras>=1.2.1"]
 all = [
-    "dreambo[examples]",
-    "dreambo[mujoco]",
-    "dreambo[nn_kinematics]",
-    "dreambo[placo_kinematics]",
-    "dreambo[rerun]",
-    "dreambo[wireless-version]",
-    "dreambo[opencv]"
+    "dreambo-torso[examples]",
+    "dreambo-torso[mujoco]",
+    "dreambo-torso[nn_kinematics]",
+    "dreambo-torso[placo_kinematics]",
+    "dreambo-torso[rerun]",
+    "dreambo-torso[wireless-version]",
+    "dreambo-torso[opencv]"
 ]
 
 [dependency-groups]
@@ -87,9 +87,9 @@ dev = [
 ]
 
 [project.scripts]
-dreambo-daemon = "dreambo.daemon.app.main:main"
-dreambo-app-assistant = "dreambo.apps.app:main"
-dreambo-reflash-motors = "dreambo.tools.reflash_motors:main"
+dreambo-torso-daemon = "dreambo_torso.daemon.app.main:main"
+dreambo-torso-app-assistant = "dreambo_torso.apps.app:main"
+dreambo-torso-reflash-motors = "dreambo_torso.tools.reflash_motors:main"
 
 [tool.uv]
 dependency-metadata = [
@@ -108,11 +108,11 @@ where = ["src"]
 
 
 [tool.setuptools.package-data]
-dreambo = ["**/*"] # includes all non .py files
+dreambo_torso = ["**/*"] # includes all non .py files
 
 [tool.ruff]
 exclude = [
-    "src/dreambo/__init__.py",
+    "src/dreambo_torso/__init__.py",
     "build/*",
     "conftest.py",
     "src/reachy_mini_dashboard/*",

@@ -4,7 +4,7 @@ import warnings
 
 import pytest
 
-from dreambo.media.media_manager import MediaBackend, _resolve_backend
+from dreambo_torso.media.media_manager import MediaBackend, _resolve_backend
 
 
 class TestMediaBackend:

@@ -11,7 +11,7 @@ This is a *static* copy of the spec. The live, interactive version (Swagger UI)
 is served by the daemon itself at:
 
     http://localhost:8000/docs       (Lite — daemon on your machine)
-    http://dreambo.local:8000/docs  (Wireless — daemon on the robot)
+    http://dreambo_torso.local:8000/docs  (Wireless — daemon on the robot)
 
 The live version lets you send real requests to the robot.  This static copy is
 for offline reference and for the hosted documentation site.
@@ -27,8 +27,7 @@ script never touches motors, serial ports, or audio devices.
 
 import json
 from pathlib import Path
-
-from dreambo.daemon.app.main import Args, create_app
+from dreambo_torso.daemon.app.main import Args, create_app
 
 OUTPUT_PATH = (
     Path(__file__).resolve().parent.parent / "docs" / "source" / "API" / "openapi.json"

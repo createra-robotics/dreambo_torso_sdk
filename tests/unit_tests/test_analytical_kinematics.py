@@ -1,4 +1,4 @@
-from dreambo.kinematics import AnalyticalKinematics
+from dreambo_torso.kinematics import AnalyticalKinematics
 import numpy as np
 
 def test_analytical_kinematics():

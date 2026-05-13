@@ -34,7 +34,7 @@ except ImportError:
     sys.exit(1)
 
 import numpy as np
-from dreambo import Dreambo
+from dreambo_torso import Dreambo
 
 
 def main() -> None:

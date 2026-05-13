@@ -1,10 +1,10 @@
 import pytest
 
 
-from dreambo.dreambo import Dreambo
+from dreambo_torso.dreambo_torso import Dreambo
 import time
 import numpy as np
-from dreambo.media.camera_constants import CameraResolution
+from dreambo_torso.media.camera_constants import CameraResolution
 
 @pytest.mark.wireless
 def test_daemon_wireless_client_disconnection() -> None:

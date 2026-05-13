@@ -1,6 +1,6 @@
 import threading
 
-from dreambo import Dreambo, ReachyMiniApp
+from dreambo_torso import Dreambo, ReachyMiniApp
 
 
 class FaultyApp(ReachyMiniApp):

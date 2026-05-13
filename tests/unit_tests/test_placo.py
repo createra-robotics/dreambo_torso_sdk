@@ -7,8 +7,8 @@ import pytest
     platform.system() == "Windows", reason="Placo is not available on Windows"
 )
 def test_load_kinematics():  # noqa: D100, D103
-    from dreambo.utils.constants import URDF_ROOT_PATH
-    from dreambo.kinematics import PlacoKinematics
+    from dreambo_torso.utils.constants import URDF_ROOT_PATH
+    from dreambo_torso.kinematics import PlacoKinematics
 
     # Test loading the kinematics
     kinematics = PlacoKinematics(URDF_ROOT_PATH)

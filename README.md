@@ -194,7 +194,7 @@ ls -la /dev/bus/usb/$(lsusb | grep 2886 | awk '{printf "%03d/%03d", $2, $4}' | t
 # Expected: crw-rw-rw- (mode 0666) — readable/writable by everyone
 ```
 
-Restart dreambo-daemon
+Restart dreambo-torso-daemon
 
 ---
 
@@ -208,13 +208,13 @@ uv sync --extra mujoco       # or: uv pip install 'mujoco==3.3.0'
 
 ```bash
 # With the GUI viewer (recommended first time)
-dreambo-daemon --sim --scene empty
+dreambo-torso-daemon --sim --scene empty
 
 # Headless (no viewer, just physics + WS server)
-dreambo-daemon --sim --headless --scene empty
+dreambo-torso-daemon --sim --headless --scene empty
 
 # Other built-in scene
-dreambo-daemon --sim --scene minimal
+dreambo-torso-daemon --sim --scene minimal
 ```
 
 ---
@@ -222,7 +222,7 @@ dreambo-daemon --sim --scene minimal
 ## Launch Dreambo torsor Daemon
 
 ```bash
-DREAMBO_DISABLE_AUDIO=1 dreambo-daemon
+DREAMBO_DISABLE_AUDIO=1 dreambo-torso-daemon
 
 #Or export it once for the session:
 export DREAMBO_DISABLE_AUDIO=1

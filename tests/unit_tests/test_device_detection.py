@@ -13,12 +13,12 @@ from typing import List
 
 import pytest
 
-from dreambo.media.camera_constants import (
+from dreambo_torso.media.camera_constants import (
     ArducamSpecs,
     CameraSpecs,
     ReachyMiniLiteCamSpecs,
 )
-from dreambo.media.device_detection import (
+from dreambo_torso.media.device_detection import (
     DeviceInfo,
     find_audio_device,
     find_video_device,

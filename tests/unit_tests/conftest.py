@@ -13,12 +13,12 @@ try:
 except ImportError:
     pass
 
-from dreambo.daemon.utils import (
+from dreambo_torso.daemon.utils import (
     CAMERA_PIPE_NAME,
     CAMERA_SOCKET_PATH,
     is_local_camera_available,
 )
-from dreambo.media.camera_constants import (
+from dreambo_torso.media.camera_constants import (
     CameraResolution,
     CameraSpecs,
     ReachyMiniLiteCamSpecs,

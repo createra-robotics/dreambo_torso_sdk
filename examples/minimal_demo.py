@@ -6,8 +6,8 @@ import time
 
 import numpy as np
 
-from dreambo import Dreambo
-from dreambo.utils import create_head_pose
+from dreambo_torso import Dreambo
+from dreambo_torso.utils import create_head_pose
 
 with Dreambo(media_backend="no_media") as mini:
     mini.goto_target(create_head_pose(), antennas=[0.0, 0.0], duration=1.0)

@@ -8,8 +8,8 @@ import tkinter as tk
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-from dreambo import Dreambo
-from dreambo.utils import create_head_pose
+from dreambo_torso import Dreambo
+from dreambo_torso.utils import create_head_pose
 
 
 def main() -> None:

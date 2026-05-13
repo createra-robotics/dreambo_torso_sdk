@@ -9,13 +9,13 @@ import importlib.util
 import numpy as np
 import pytest
 
-from dreambo.media.camera_constants import (
+from dreambo_torso.media.camera_constants import (
     ArducamSpecs,
     GenericWebcamSpecs,
     MujocoCameraSpecs,
     ReachyMiniLiteCamSpecs,
 )
-from dreambo.media.camera_utils import undistort_points
+from dreambo_torso.media.camera_utils import undistort_points
 
 _opencv_available = importlib.util.find_spec("cv2") is not None
 

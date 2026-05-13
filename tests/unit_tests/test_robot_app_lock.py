@@ -16,7 +16,7 @@ import asyncio
 
 import pytest
 
-from dreambo.daemon.robot_app_lock import RobotAppLock, RobotAppLockState
+from dreambo_torso.daemon.robot_app_lock import RobotAppLock, RobotAppLockState
 
 
 # ---------------------------------------------------------------------------

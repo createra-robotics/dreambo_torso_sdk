@@ -6,7 +6,7 @@ fixed rate, and writes the captured trajectory to a JSON file.
 
 The resulting JSON can be played back with::
 
-    from dreambo.motion.recorded_move import RecordedMove
+    from dreambo_torso.motion.recorded_move import RecordedMove
     move = RecordedMove(json.load(open("my_move.json")))
     reachy.play_move(move, initial_goto_duration=1.0)
 
@@ -30,7 +30,7 @@ import json
 import time
 from pathlib import Path
 from typing import Any
-from dreambo import Dreambo
+from dreambo_torso import Dreambo
 
 
 def record(

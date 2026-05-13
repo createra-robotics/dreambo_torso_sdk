@@ -25,9 +25,9 @@ except ImportError:
     print("Install it with: pip install reachy_mini[opencv]")
     sys.exit(1)
 
-from dreambo import Dreambo
+from dreambo_torso import Dreambo
 
-# from dreambo.media.camera_constants import CameraResolution
+# from dreambo_torso.media.camera_constants import CameraResolution
 
 
 def click(event: int, x: int, y: int, flags: int, param: Any) -> None:

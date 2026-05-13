@@ -1,6 +1,6 @@
-from dreambo.utils.constants import URDF_ROOT_PATH
-from dreambo.kinematics import PlacoKinematics
-from dreambo.utils import create_head_pose
+from dreambo_torso.utils.constants import URDF_ROOT_PATH
+from dreambo_torso.kinematics import PlacoKinematics
+from dreambo_torso.utils import create_head_pose
 
 
 def offline_test_collision():

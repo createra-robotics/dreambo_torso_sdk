@@ -1,7 +1,7 @@
 import threading
 import time
 
-from dreambo import Dreambo, ReachyMiniApp
+from dreambo_torso import Dreambo, ReachyMiniApp
 
 
 class OkApp(ReachyMiniApp):

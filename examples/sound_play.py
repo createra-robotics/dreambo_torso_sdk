@@ -14,7 +14,7 @@ import wave
 
 import numpy as np
 
-from dreambo import Dreambo
+from dreambo_torso import Dreambo
 
 
 def play_wav(mini: "Dreambo", wav_path: str) -> None:

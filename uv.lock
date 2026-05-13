@@ -790,7 +790,51 @@ wheels = [
 ]
 
 [[package]]
-name = "dreambo"
+name = "dreambo-motor-controller"
+version = "1.1.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/6e/c8/c47201198049f8505d4908c94f9f195613215613d29382b77efda713389d/dreambo_motor_controller-1.1.1.tar.gz", hash = "sha256:24e12c5056977bca2075bf566cfd2207614e1fe726b3e677c4e1cbfe2b81c6c9", size = 59379, upload-time = "2026-05-11T13:36:25.729Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/40/d0/94e530e84a053ce887a0c2aeea2c69fbd45c2632b106b65538af1376c5f3/dreambo_motor_controller-1.1.1-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:d0a5837720968228c500519324434cb7a2b2ff5759dbfbe684630c8657d968e4", size = 647896, upload-time = "2026-05-11T13:35:35.708Z" },
+    { url = "https://files.pythonhosted.org/packages/df/5e/dcb1a8a5cc9de2cb2201025dc9e99b7f9fd124b39b2b71d72c44c7f82ee5/dreambo_motor_controller-1.1.1-cp310-cp310-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:27293eeb34e0392fb2aea66ffe1602a0b5bfcccee07800b6a9e61d28b592659c", size = 657164, upload-time = "2026-05-11T13:35:41.202Z" },
+    { url = "https://files.pythonhosted.org/packages/9f/50/7abcb8868162c7cc63ae3277cdf43b011652fe4c532d473e40ae95dbff3b/dreambo_motor_controller-1.1.1-cp310-cp310-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:210fe2279db2004aeb7ba41476b782150006064f92ca6b529f65692845868f25", size = 707577, upload-time = "2026-05-11T13:35:45.891Z" },
+    { url = "https://files.pythonhosted.org/packages/f9/f0/364c5e1ff60a2c0cdb1016ce9b89b910718ed3de495a7418d8c331e2b17c/dreambo_motor_controller-1.1.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:00e4cf30e0e45efe8c870cfa53a92022aefef4f08a6898f89708b839037fc9ed", size = 666879, upload-time = "2026-05-11T13:35:50.908Z" },
+    { url = "https://files.pythonhosted.org/packages/dd/58/34142f2703f4087d9884f8831e7c9dcbdc54938ef1e5afa8671305439726/dreambo_motor_controller-1.1.1-cp310-cp310-musllinux_1_2_aarch64.whl", hash = "sha256:88518be90c2e3b041bd7db7e3a00ada3cfa20a14632afb84b4709116690d1f9e", size = 823078, upload-time = "2026-05-11T13:35:55.519Z" },
+    { url = "https://files.pythonhosted.org/packages/2f/a1/c6ea142e74dcc920c13ce9b0e15c199c87d62ead47b57a394336c6dfc9e6/dreambo_motor_controller-1.1.1-cp310-cp310-musllinux_1_2_armv7l.whl", hash = "sha256:d05e47b491dce84ac10c59c85e0d6addf9cb24ab8ed267565864dc08905738cb", size = 923463, upload-time = "2026-05-11T13:36:01.452Z" },
+    { url = "https://files.pythonhosted.org/packages/3c/42/b5d58959791e74f87ca1fa1f2bb8efb3158b47576a236a0c30421a4f892d/dreambo_motor_controller-1.1.1-cp310-cp310-musllinux_1_2_i686.whl", hash = "sha256:527c687ea2e5aa91488fcbae41a91b6be23d891a5992a19d273e914bdff1a550", size = 901282, upload-time = "2026-05-11T13:36:13.544Z" },
+    { url = "https://files.pythonhosted.org/packages/89/03/45dab6233a057c256936a6c610582eb9cf7bd0ed818424f5b885561795a6/dreambo_motor_controller-1.1.1-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:919b44a5efd76847b451f10f3af3ea7b8f9552d4d13a5bc9b5179729e0484f46", size = 856867, upload-time = "2026-05-11T13:36:19.617Z" },
+    { url = "https://files.pythonhosted.org/packages/6e/d9/b6a6f376c24d9ee260a6314f076c705f7e9870662329793c58ebbe6c42d6/dreambo_motor_controller-1.1.1-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:7ae20ecbec968936388a495fc24b49457aad5c24e194dbb4f73027a6f41484d9", size = 647743, upload-time = "2026-05-11T13:35:37.094Z" },
+    { url = "https://files.pythonhosted.org/packages/0a/5e/639d27cf1e5e11e7eece09f6ddb8aa88347a5bea606dedce80f1cd438dbe/dreambo_motor_controller-1.1.1-cp311-cp311-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:916aeb0f59fd5824ea134d62e25b3959786be323fb110e39fc26d4376c8c3f81", size = 658040, upload-time = "2026-05-11T13:35:42.293Z" },
+    { url = "https://files.pythonhosted.org/packages/56/85/afb51617cdde0de6056dccd10f6c64859f85875f57b6b43b266079656b29/dreambo_motor_controller-1.1.1-cp311-cp311-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:fb55518d5db5b779a476fc5137c0a1d5aae7a0a4dda2fa16a8a768ee4155f814", size = 707516, upload-time = "2026-05-11T13:35:47.266Z" },
+    { url = "https://files.pythonhosted.org/packages/84/97/8c48db24d15d6be5d6b859d744e1dcdfc77a32dc57a8cc61868bdc95f360/dreambo_motor_controller-1.1.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:365d256eda1143016ca1e370e5c52347d0b78ef391d27cb615a4a680695958ef", size = 666374, upload-time = "2026-05-11T13:35:52.137Z" },
+    { url = "https://files.pythonhosted.org/packages/54/37/b75d48418141b51f61e4a13827071047e06979191d3e5d8102407fe1b9bf/dreambo_motor_controller-1.1.1-cp311-cp311-musllinux_1_2_aarch64.whl", hash = "sha256:48b1f428812c160dab5658afe283333c0e6a0c8c38e4c3db42b385f638ce79dd", size = 822868, upload-time = "2026-05-11T13:35:56.745Z" },
+    { url = "https://files.pythonhosted.org/packages/4e/c6/e7ccc0bfd25db07177716376b9a63d580d13b2da6040e1ef0a645d5b1e81/dreambo_motor_controller-1.1.1-cp311-cp311-musllinux_1_2_armv7l.whl", hash = "sha256:6688e9477149a6a1c793a9b2fe8a1aeff292bb97de42c2dba1711640def7bc2e", size = 923635, upload-time = "2026-05-11T13:36:02.796Z" },
+    { url = "https://files.pythonhosted.org/packages/19/4b/1d1e783de7b6d6e72379b2710edb1f082c5f18b989b3de0eef51c6a2a479/dreambo_motor_controller-1.1.1-cp311-cp311-musllinux_1_2_i686.whl", hash = "sha256:4836c828986f262378b207ebce48355a7c5afefb264df8a484a9c1c12eaa04c9", size = 900644, upload-time = "2026-05-11T13:36:14.908Z" },
+    { url = "https://files.pythonhosted.org/packages/f1/6d/a2c47f9df1177e01af03e381cc233724d6439ff66cf035bff99381e11483/dreambo_motor_controller-1.1.1-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:e4b14415636620bce1682c0c383e61885d9ab1eced8dadf4c3e1b3881603c114", size = 855425, upload-time = "2026-05-11T13:36:20.641Z" },
+    { url = "https://files.pythonhosted.org/packages/3f/64/4d3969cc7c04e4a857ffa2c207ed46bea64ef4052b4d7505887bb0bf185f/dreambo_motor_controller-1.1.1-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:20459ba2aee4a0da339c348dece763478a4ff3e86e8b1b4d9d3812ba0bfdceb0", size = 649003, upload-time = "2026-05-11T13:35:38.341Z" },
+    { url = "https://files.pythonhosted.org/packages/f9/09/a10d9159a85b559561192dc4b669a4ca3436b1a8d7c0d86574dcc94684ad/dreambo_motor_controller-1.1.1-cp312-cp312-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:915dae37a13d8a5cefc88c6354667a485ab58f3530170ec0df2ebff6b03aa60e", size = 657607, upload-time = "2026-05-11T13:35:43.39Z" },
+    { url = "https://files.pythonhosted.org/packages/81/f3/235af92f98a3c9945775ebb4b9b99c2936889e87b9e33a0c5ac485a0f895/dreambo_motor_controller-1.1.1-cp312-cp312-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:1a102770ef202883acb88f27f4bf7f1ebaf3558f62d7f6677b47e82c1c04149d", size = 703870, upload-time = "2026-05-11T13:35:48.393Z" },
+    { url = "https://files.pythonhosted.org/packages/11/f0/7c1c0f0316977265c688cc1940cdf7acbfa0688aecae9a94d3e0f53c9f22/dreambo_motor_controller-1.1.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:ee3926986a30adf431a0c2808cb4d90e11c771e65f687ae3d48c452d8436bf81", size = 664985, upload-time = "2026-05-11T13:35:53.471Z" },
+    { url = "https://files.pythonhosted.org/packages/20/ba/64709669132a5802b4120b5a276b865ddb6046048a0946fa157063a5217e/dreambo_motor_controller-1.1.1-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:b55616282afda0f6ccf3b38674eca1275ebeff88c457fa7297b08dc08c5e0649", size = 823064, upload-time = "2026-05-11T13:35:58.062Z" },
+    { url = "https://files.pythonhosted.org/packages/d9/38/a7638dacb392010c6eba2b05ca9b3a891c7fc7c6283a6ab98205377290b8/dreambo_motor_controller-1.1.1-cp312-cp312-musllinux_1_2_armv7l.whl", hash = "sha256:ca3345bc0172a4f4921de43a9636f1b9058e28e0e7340cfeca8c27cb7e0c8ffa", size = 923525, upload-time = "2026-05-11T13:36:03.964Z" },
+    { url = "https://files.pythonhosted.org/packages/84/a7/4898b449d20781f7c671a8a147a96f48116162516d8bcfb4d0dc02646702/dreambo_motor_controller-1.1.1-cp312-cp312-musllinux_1_2_i686.whl", hash = "sha256:aee049c42e4f9a78aef4a754f8cb440dc70e4b955cc512898b408b0eae8fded0", size = 896734, upload-time = "2026-05-11T13:36:15.996Z" },
+    { url = "https://files.pythonhosted.org/packages/7d/33/099e6e56b710041cc0adaec9dc6c7db0a28f91a815c7b973a80c93c47bc0/dreambo_motor_controller-1.1.1-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:f614d35cf43a2d00fda390e002dea97d151688be81e19e5101ac978e8629b1a6", size = 854130, upload-time = "2026-05-11T13:36:21.839Z" },
+    { url = "https://files.pythonhosted.org/packages/6d/af/9e02783f22f3c3a013362bf17c7b128cec5dc256033a3821b16e92f90f63/dreambo_motor_controller-1.1.1-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:8f08d08975e729723af397a5937d239f7fdab3279087a8e83e4507172b76ec4f", size = 648788, upload-time = "2026-05-11T13:35:39.776Z" },
+    { url = "https://files.pythonhosted.org/packages/ed/8e/a1e40cc2496ac52a2c826af5191cf26aa46a5b206a318e6de156b9337caa/dreambo_motor_controller-1.1.1-cp313-cp313-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:4c872a87688761bca404edd1512e178fc2c9953753dba3be48faf4772dcf5042", size = 656826, upload-time = "2026-05-11T13:35:44.539Z" },
+    { url = "https://files.pythonhosted.org/packages/e4/93/9f42be2077d78dfd4d946f446eb4349bebf42dcb91aa7c9ce6356dbc8550/dreambo_motor_controller-1.1.1-cp313-cp313-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:9d7d574fa853c34f8c4473a29ec454f4f51f30b3d7ff698fb3ba951958d78d8a", size = 702737, upload-time = "2026-05-11T13:35:49.833Z" },
+    { url = "https://files.pythonhosted.org/packages/85/a9/01c981ab532f55d7843a578b4829b3233073c69cd5dea8501333022d9f90/dreambo_motor_controller-1.1.1-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:7fc3028a3b6eab14e30bd560943558bfdf6fb3838ad1abe716b62b054432b7b0", size = 664979, upload-time = "2026-05-11T13:35:54.468Z" },
+    { url = "https://files.pythonhosted.org/packages/a6/e6/334c29ea80adebd337eb62250291993f3143905555990226e1b2cc557faa/dreambo_motor_controller-1.1.1-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:c16523750776251d99747693a0cc3671b210955d8256719d2911ed10464434c5", size = 823051, upload-time = "2026-05-11T13:35:59.168Z" },
+    { url = "https://files.pythonhosted.org/packages/58/cb/caf38ba72c3188a0369bb958140c5ac8864905c5ce58c82d1fcf56e86a63/dreambo_motor_controller-1.1.1-cp313-cp313-musllinux_1_2_armv7l.whl", hash = "sha256:578c26101a7978222a3d8d62224aec1c98f99502aaceec2648fc9fd32b2972a4", size = 922797, upload-time = "2026-05-11T13:36:05.65Z" },
+    { url = "https://files.pythonhosted.org/packages/19/99/8aa65c48af899a9088a2c02c3d829accf38462e558fd2e2e331fe3332255/dreambo_motor_controller-1.1.1-cp313-cp313-musllinux_1_2_i686.whl", hash = "sha256:80c41f0b89c4a184134ee21ca38f601067e057c030e0de56d39302e659530877", size = 896237, upload-time = "2026-05-11T13:36:17.413Z" },
+    { url = "https://files.pythonhosted.org/packages/f6/5f/74616476654ff5141d9df0c03596136ebd7794bbd14c0edc477392dd5add/dreambo_motor_controller-1.1.1-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:463c8157aaf6629f5483a0eeec370f20d2824f20605b1dce198106ea9a955766", size = 853476, upload-time = "2026-05-11T13:36:23.214Z" },
+    { url = "https://files.pythonhosted.org/packages/28/86/af384d4f9ab10abe7df1c3dc810bac13eb5934e1d94458681d424efa7b54/dreambo_motor_controller-1.1.1-cp314-cp314-musllinux_1_2_aarch64.whl", hash = "sha256:b42b964938c72e5c5a2a97a0545d8ea2a0ebd5002b46da4b7e1ca633a5937091", size = 821919, upload-time = "2026-05-11T13:36:00.319Z" },
+    { url = "https://files.pythonhosted.org/packages/81/a4/55260c19b65e678da90975394cb8bb9e9406a00db2803d3ba0de20e4d3c3/dreambo_motor_controller-1.1.1-cp314-cp314-musllinux_1_2_armv7l.whl", hash = "sha256:1e0bda339f8c2f8be96c220d32556cb3d4e890bf96b0ea511d1f27a7ea00a671", size = 922293, upload-time = "2026-05-11T13:36:06.744Z" },
+    { url = "https://files.pythonhosted.org/packages/91/2a/034be95f65488cb70872dd6a493410f1b1be9f62aba5ccc26c86f2efddb6/dreambo_motor_controller-1.1.1-cp314-cp314-musllinux_1_2_i686.whl", hash = "sha256:785dcb1052c2f037832e77892df43b8fc5353cf9ec07c004d663d5bda96862e3", size = 896738, upload-time = "2026-05-11T13:36:18.507Z" },
+    { url = "https://files.pythonhosted.org/packages/47/2a/8182396ec47be86a1b7d4e4d15706d1663584e8549e103cf6fbcafef59df/dreambo_motor_controller-1.1.1-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:22482041c6d10d57746a94e1d3b91c2428e61282c52c4750d2ad6fb0ff7557ea", size = 851994, upload-time = "2026-05-11T13:36:24.651Z" },
+]
+
+[[package]]
+name = "dreambo-torso"
 version = "1.0.0"
 source = { editable = "." }
 dependencies = [
@@ -809,6 +853,7 @@ dependencies = [
     { name = "pip" },
     { name = "psutil" },
     { name = "pulsectl", marker = "sys_platform == 'linux'" },
+    { name = "pycairo" },
     { name = "pycaw", marker = "sys_platform == 'win32'" },
     { name = "pygobject", marker = "sys_platform == 'linux'" },
     { name = "pygobject-stubs" },
@@ -897,14 +942,14 @@ requires-dist = [
     { name = "asgiref" },
     { name = "cv2-enumerate-cameras", marker = "extra == 'examples'", specifier = ">=1.2.1" },
     { name = "cv2-enumerate-cameras", marker = "extra == 'opencv'", specifier = ">=1.2.1" },
-    { name = "dreambo", extras = ["examples"], marker = "extra == 'all'" },
-    { name = "dreambo", extras = ["mujoco"], marker = "extra == 'all'" },
-    { name = "dreambo", extras = ["nn-kinematics"], marker = "extra == 'all'" },
-    { name = "dreambo", extras = ["opencv"], marker = "extra == 'all'" },
-    { name = "dreambo", extras = ["placo-kinematics"], marker = "extra == 'all'" },
-    { name = "dreambo", extras = ["rerun"], marker = "extra == 'all'" },
-    { name = "dreambo", extras = ["wireless-version"], marker = "extra == 'all'" },
     { name = "dreambo-motor-controller", specifier = ">=1.1.1" },
+    { name = "dreambo-torso", extras = ["examples"], marker = "extra == 'all'" },
+    { name = "dreambo-torso", extras = ["mujoco"], marker = "extra == 'all'" },
+    { name = "dreambo-torso", extras = ["nn-kinematics"], marker = "extra == 'all'" },
+    { name = "dreambo-torso", extras = ["opencv"], marker = "extra == 'all'" },
+    { name = "dreambo-torso", extras = ["placo-kinematics"], marker = "extra == 'all'" },
+    { name = "dreambo-torso", extras = ["rerun"], marker = "extra == 'all'" },
+    { name = "dreambo-torso", extras = ["wireless-version"], marker = "extra == 'all'" },
     { name = "dreambo-torso-kinematics", specifier = ">=1.0.1" },
     { name = "fastapi" },
     { name = "gpiozero", marker = "sys_platform == 'linux' and extra == 'wireless-version'", specifier = ">=2.0.0" },
@@ -926,6 +971,7 @@ requires-dist = [
     { name = "pollen-bmi088-imu-library", marker = "sys_platform == 'linux' and extra == 'wireless-version'" },
     { name = "psutil" },
     { name = "pulsectl", marker = "sys_platform == 'linux'", specifier = ">=24.1.0" },
+    { name = "pycairo", specifier = ">=1.29.0" },
     { name = "pycaw", marker = "sys_platform == 'win32'", specifier = ">=20240210" },
     { name = "pygobject", marker = "sys_platform == 'linux'", specifier = ">=3.50.0" },
     { name = "pygobject-stubs", specifier = ">=2.17.0" },
@@ -964,50 +1010,6 @@ dev = [
     { name = "types-pyyaml" },
     { name = "types-requests" },
     { name = "types-toml" },
-]
-
-[[package]]
-name = "dreambo-motor-controller"
-version = "1.1.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/6e/c8/c47201198049f8505d4908c94f9f195613215613d29382b77efda713389d/dreambo_motor_controller-1.1.1.tar.gz", hash = "sha256:24e12c5056977bca2075bf566cfd2207614e1fe726b3e677c4e1cbfe2b81c6c9", size = 59379, upload-time = "2026-05-11T13:36:25.729Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/40/d0/94e530e84a053ce887a0c2aeea2c69fbd45c2632b106b65538af1376c5f3/dreambo_motor_controller-1.1.1-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:d0a5837720968228c500519324434cb7a2b2ff5759dbfbe684630c8657d968e4", size = 647896, upload-time = "2026-05-11T13:35:35.708Z" },
-    { url = "https://files.pythonhosted.org/packages/df/5e/dcb1a8a5cc9de2cb2201025dc9e99b7f9fd124b39b2b71d72c44c7f82ee5/dreambo_motor_controller-1.1.1-cp310-cp310-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:27293eeb34e0392fb2aea66ffe1602a0b5bfcccee07800b6a9e61d28b592659c", size = 657164, upload-time = "2026-05-11T13:35:41.202Z" },
-    { url = "https://files.pythonhosted.org/packages/9f/50/7abcb8868162c7cc63ae3277cdf43b011652fe4c532d473e40ae95dbff3b/dreambo_motor_controller-1.1.1-cp310-cp310-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:210fe2279db2004aeb7ba41476b782150006064f92ca6b529f65692845868f25", size = 707577, upload-time = "2026-05-11T13:35:45.891Z" },
-    { url = "https://files.pythonhosted.org/packages/f9/f0/364c5e1ff60a2c0cdb1016ce9b89b910718ed3de495a7418d8c331e2b17c/dreambo_motor_controller-1.1.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:00e4cf30e0e45efe8c870cfa53a92022aefef4f08a6898f89708b839037fc9ed", size = 666879, upload-time = "2026-05-11T13:35:50.908Z" },
-    { url = "https://files.pythonhosted.org/packages/dd/58/34142f2703f4087d9884f8831e7c9dcbdc54938ef1e5afa8671305439726/dreambo_motor_controller-1.1.1-cp310-cp310-musllinux_1_2_aarch64.whl", hash = "sha256:88518be90c2e3b041bd7db7e3a00ada3cfa20a14632afb84b4709116690d1f9e", size = 823078, upload-time = "2026-05-11T13:35:55.519Z" },
-    { url = "https://files.pythonhosted.org/packages/2f/a1/c6ea142e74dcc920c13ce9b0e15c199c87d62ead47b57a394336c6dfc9e6/dreambo_motor_controller-1.1.1-cp310-cp310-musllinux_1_2_armv7l.whl", hash = "sha256:d05e47b491dce84ac10c59c85e0d6addf9cb24ab8ed267565864dc08905738cb", size = 923463, upload-time = "2026-05-11T13:36:01.452Z" },
-    { url = "https://files.pythonhosted.org/packages/3c/42/b5d58959791e74f87ca1fa1f2bb8efb3158b47576a236a0c30421a4f892d/dreambo_motor_controller-1.1.1-cp310-cp310-musllinux_1_2_i686.whl", hash = "sha256:527c687ea2e5aa91488fcbae41a91b6be23d891a5992a19d273e914bdff1a550", size = 901282, upload-time = "2026-05-11T13:36:13.544Z" },
-    { url = "https://files.pythonhosted.org/packages/89/03/45dab6233a057c256936a6c610582eb9cf7bd0ed818424f5b885561795a6/dreambo_motor_controller-1.1.1-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:919b44a5efd76847b451f10f3af3ea7b8f9552d4d13a5bc9b5179729e0484f46", size = 856867, upload-time = "2026-05-11T13:36:19.617Z" },
-    { url = "https://files.pythonhosted.org/packages/6e/d9/b6a6f376c24d9ee260a6314f076c705f7e9870662329793c58ebbe6c42d6/dreambo_motor_controller-1.1.1-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:7ae20ecbec968936388a495fc24b49457aad5c24e194dbb4f73027a6f41484d9", size = 647743, upload-time = "2026-05-11T13:35:37.094Z" },
-    { url = "https://files.pythonhosted.org/packages/0a/5e/639d27cf1e5e11e7eece09f6ddb8aa88347a5bea606dedce80f1cd438dbe/dreambo_motor_controller-1.1.1-cp311-cp311-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:916aeb0f59fd5824ea134d62e25b3959786be323fb110e39fc26d4376c8c3f81", size = 658040, upload-time = "2026-05-11T13:35:42.293Z" },
-    { url = "https://files.pythonhosted.org/packages/56/85/afb51617cdde0de6056dccd10f6c64859f85875f57b6b43b266079656b29/dreambo_motor_controller-1.1.1-cp311-cp311-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:fb55518d5db5b779a476fc5137c0a1d5aae7a0a4dda2fa16a8a768ee4155f814", size = 707516, upload-time = "2026-05-11T13:35:47.266Z" },
-    { url = "https://files.pythonhosted.org/packages/84/97/8c48db24d15d6be5d6b859d744e1dcdfc77a32dc57a8cc61868bdc95f360/dreambo_motor_controller-1.1.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:365d256eda1143016ca1e370e5c52347d0b78ef391d27cb615a4a680695958ef", size = 666374, upload-time = "2026-05-11T13:35:52.137Z" },
-    { url = "https://files.pythonhosted.org/packages/54/37/b75d48418141b51f61e4a13827071047e06979191d3e5d8102407fe1b9bf/dreambo_motor_controller-1.1.1-cp311-cp311-musllinux_1_2_aarch64.whl", hash = "sha256:48b1f428812c160dab5658afe283333c0e6a0c8c38e4c3db42b385f638ce79dd", size = 822868, upload-time = "2026-05-11T13:35:56.745Z" },
-    { url = "https://files.pythonhosted.org/packages/4e/c6/e7ccc0bfd25db07177716376b9a63d580d13b2da6040e1ef0a645d5b1e81/dreambo_motor_controller-1.1.1-cp311-cp311-musllinux_1_2_armv7l.whl", hash = "sha256:6688e9477149a6a1c793a9b2fe8a1aeff292bb97de42c2dba1711640def7bc2e", size = 923635, upload-time = "2026-05-11T13:36:02.796Z" },
-    { url = "https://files.pythonhosted.org/packages/19/4b/1d1e783de7b6d6e72379b2710edb1f082c5f18b989b3de0eef51c6a2a479/dreambo_motor_controller-1.1.1-cp311-cp311-musllinux_1_2_i686.whl", hash = "sha256:4836c828986f262378b207ebce48355a7c5afefb264df8a484a9c1c12eaa04c9", size = 900644, upload-time = "2026-05-11T13:36:14.908Z" },
-    { url = "https://files.pythonhosted.org/packages/f1/6d/a2c47f9df1177e01af03e381cc233724d6439ff66cf035bff99381e11483/dreambo_motor_controller-1.1.1-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:e4b14415636620bce1682c0c383e61885d9ab1eced8dadf4c3e1b3881603c114", size = 855425, upload-time = "2026-05-11T13:36:20.641Z" },
-    { url = "https://files.pythonhosted.org/packages/3f/64/4d3969cc7c04e4a857ffa2c207ed46bea64ef4052b4d7505887bb0bf185f/dreambo_motor_controller-1.1.1-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:20459ba2aee4a0da339c348dece763478a4ff3e86e8b1b4d9d3812ba0bfdceb0", size = 649003, upload-time = "2026-05-11T13:35:38.341Z" },
-    { url = "https://files.pythonhosted.org/packages/f9/09/a10d9159a85b559561192dc4b669a4ca3436b1a8d7c0d86574dcc94684ad/dreambo_motor_controller-1.1.1-cp312-cp312-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:915dae37a13d8a5cefc88c6354667a485ab58f3530170ec0df2ebff6b03aa60e", size = 657607, upload-time = "2026-05-11T13:35:43.39Z" },
-    { url = "https://files.pythonhosted.org/packages/81/f3/235af92f98a3c9945775ebb4b9b99c2936889e87b9e33a0c5ac485a0f895/dreambo_motor_controller-1.1.1-cp312-cp312-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:1a102770ef202883acb88f27f4bf7f1ebaf3558f62d7f6677b47e82c1c04149d", size = 703870, upload-time = "2026-05-11T13:35:48.393Z" },
-    { url = "https://files.pythonhosted.org/packages/11/f0/7c1c0f0316977265c688cc1940cdf7acbfa0688aecae9a94d3e0f53c9f22/dreambo_motor_controller-1.1.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:ee3926986a30adf431a0c2808cb4d90e11c771e65f687ae3d48c452d8436bf81", size = 664985, upload-time = "2026-05-11T13:35:53.471Z" },
-    { url = "https://files.pythonhosted.org/packages/20/ba/64709669132a5802b4120b5a276b865ddb6046048a0946fa157063a5217e/dreambo_motor_controller-1.1.1-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:b55616282afda0f6ccf3b38674eca1275ebeff88c457fa7297b08dc08c5e0649", size = 823064, upload-time = "2026-05-11T13:35:58.062Z" },
-    { url = "https://files.pythonhosted.org/packages/d9/38/a7638dacb392010c6eba2b05ca9b3a891c7fc7c6283a6ab98205377290b8/dreambo_motor_controller-1.1.1-cp312-cp312-musllinux_1_2_armv7l.whl", hash = "sha256:ca3345bc0172a4f4921de43a9636f1b9058e28e0e7340cfeca8c27cb7e0c8ffa", size = 923525, upload-time = "2026-05-11T13:36:03.964Z" },
-    { url = "https://files.pythonhosted.org/packages/84/a7/4898b449d20781f7c671a8a147a96f48116162516d8bcfb4d0dc02646702/dreambo_motor_controller-1.1.1-cp312-cp312-musllinux_1_2_i686.whl", hash = "sha256:aee049c42e4f9a78aef4a754f8cb440dc70e4b955cc512898b408b0eae8fded0", size = 896734, upload-time = "2026-05-11T13:36:15.996Z" },
-    { url = "https://files.pythonhosted.org/packages/7d/33/099e6e56b710041cc0adaec9dc6c7db0a28f91a815c7b973a80c93c47bc0/dreambo_motor_controller-1.1.1-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:f614d35cf43a2d00fda390e002dea97d151688be81e19e5101ac978e8629b1a6", size = 854130, upload-time = "2026-05-11T13:36:21.839Z" },
-    { url = "https://files.pythonhosted.org/packages/6d/af/9e02783f22f3c3a013362bf17c7b128cec5dc256033a3821b16e92f90f63/dreambo_motor_controller-1.1.1-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:8f08d08975e729723af397a5937d239f7fdab3279087a8e83e4507172b76ec4f", size = 648788, upload-time = "2026-05-11T13:35:39.776Z" },
-    { url = "https://files.pythonhosted.org/packages/ed/8e/a1e40cc2496ac52a2c826af5191cf26aa46a5b206a318e6de156b9337caa/dreambo_motor_controller-1.1.1-cp313-cp313-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:4c872a87688761bca404edd1512e178fc2c9953753dba3be48faf4772dcf5042", size = 656826, upload-time = "2026-05-11T13:35:44.539Z" },
-    { url = "https://files.pythonhosted.org/packages/e4/93/9f42be2077d78dfd4d946f446eb4349bebf42dcb91aa7c9ce6356dbc8550/dreambo_motor_controller-1.1.1-cp313-cp313-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:9d7d574fa853c34f8c4473a29ec454f4f51f30b3d7ff698fb3ba951958d78d8a", size = 702737, upload-time = "2026-05-11T13:35:49.833Z" },
-    { url = "https://files.pythonhosted.org/packages/85/a9/01c981ab532f55d7843a578b4829b3233073c69cd5dea8501333022d9f90/dreambo_motor_controller-1.1.1-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:7fc3028a3b6eab14e30bd560943558bfdf6fb3838ad1abe716b62b054432b7b0", size = 664979, upload-time = "2026-05-11T13:35:54.468Z" },
-    { url = "https://files.pythonhosted.org/packages/a6/e6/334c29ea80adebd337eb62250291993f3143905555990226e1b2cc557faa/dreambo_motor_controller-1.1.1-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:c16523750776251d99747693a0cc3671b210955d8256719d2911ed10464434c5", size = 823051, upload-time = "2026-05-11T13:35:59.168Z" },
-    { url = "https://files.pythonhosted.org/packages/58/cb/caf38ba72c3188a0369bb958140c5ac8864905c5ce58c82d1fcf56e86a63/dreambo_motor_controller-1.1.1-cp313-cp313-musllinux_1_2_armv7l.whl", hash = "sha256:578c26101a7978222a3d8d62224aec1c98f99502aaceec2648fc9fd32b2972a4", size = 922797, upload-time = "2026-05-11T13:36:05.65Z" },
-    { url = "https://files.pythonhosted.org/packages/19/99/8aa65c48af899a9088a2c02c3d829accf38462e558fd2e2e331fe3332255/dreambo_motor_controller-1.1.1-cp313-cp313-musllinux_1_2_i686.whl", hash = "sha256:80c41f0b89c4a184134ee21ca38f601067e057c030e0de56d39302e659530877", size = 896237, upload-time = "2026-05-11T13:36:17.413Z" },
-    { url = "https://files.pythonhosted.org/packages/f6/5f/74616476654ff5141d9df0c03596136ebd7794bbd14c0edc477392dd5add/dreambo_motor_controller-1.1.1-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:463c8157aaf6629f5483a0eeec370f20d2824f20605b1dce198106ea9a955766", size = 853476, upload-time = "2026-05-11T13:36:23.214Z" },
-    { url = "https://files.pythonhosted.org/packages/28/86/af384d4f9ab10abe7df1c3dc810bac13eb5934e1d94458681d424efa7b54/dreambo_motor_controller-1.1.1-cp314-cp314-musllinux_1_2_aarch64.whl", hash = "sha256:b42b964938c72e5c5a2a97a0545d8ea2a0ebd5002b46da4b7e1ca633a5937091", size = 821919, upload-time = "2026-05-11T13:36:00.319Z" },
-    { url = "https://files.pythonhosted.org/packages/81/a4/55260c19b65e678da90975394cb8bb9e9406a00db2803d3ba0de20e4d3c3/dreambo_motor_controller-1.1.1-cp314-cp314-musllinux_1_2_armv7l.whl", hash = "sha256:1e0bda339f8c2f8be96c220d32556cb3d4e890bf96b0ea511d1f27a7ea00a671", size = 922293, upload-time = "2026-05-11T13:36:06.744Z" },
-    { url = "https://files.pythonhosted.org/packages/91/2a/034be95f65488cb70872dd6a493410f1b1be9f62aba5ccc26c86f2efddb6/dreambo_motor_controller-1.1.1-cp314-cp314-musllinux_1_2_i686.whl", hash = "sha256:785dcb1052c2f037832e77892df43b8fc5353cf9ec07c004d663d5bda96862e3", size = 896738, upload-time = "2026-05-11T13:36:18.507Z" },
-    { url = "https://files.pythonhosted.org/packages/47/2a/8182396ec47be86a1b7d4e4d15706d1663584e8549e103cf6fbcafef59df/dreambo_motor_controller-1.1.1-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:22482041c6d10d57746a94e1d3b91c2428e61282c52c4750d2ad6fb0ff7557ea", size = 851994, upload-time = "2026-05-11T13:36:24.651Z" },
 ]
 
 [[package]]

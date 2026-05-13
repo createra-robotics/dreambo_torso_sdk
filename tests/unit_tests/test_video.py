@@ -4,14 +4,14 @@ from typing import cast
 import numpy as np
 import pytest
 
-from dreambo.daemon.utils import is_local_camera_available
-from dreambo.media.camera_constants import (
+from dreambo_torso.daemon.utils import is_local_camera_available
+from dreambo_torso.media.camera_constants import (
     CameraResolution,
     CameraSpecs,
     MujocoCameraSpecs,
     ReachyMiniLiteCamSpecs,
 )
-from dreambo.media.media_manager import MediaBackend, MediaManager
+from dreambo_torso.media.media_manager import MediaBackend, MediaManager
 
 SIGNALING_HOST = "reachy-mini.local"
 

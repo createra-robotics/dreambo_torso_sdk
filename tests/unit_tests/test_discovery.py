@@ -8,7 +8,7 @@ zeroconf = pytest.importorskip("zeroconf")
 
 from zeroconf import ServiceInfo, Zeroconf
 
-from dreambo.utils.discovery import (
+from dreambo_torso.utils.discovery import (
     SERVICE_TYPE,
     DiscoveredRobot,
     MdnsServiceRegistration,
@@ -141,7 +141,7 @@ def test_find_robots_returns_empty(mock_zeroconf, mock_dnssd, mock_alive):
 @patch("reachy_mini.utils.discovery.socket.create_connection")
 def test_filter_alive_keeps_reachable(mock_conn):
     """_filter_alive keeps robots that accept TCP connections."""
-    from dreambo.utils.discovery import _filter_alive
+    from dreambo_torso.utils.discovery import _filter_alive
 
     mock_conn.return_value.__enter__ = MagicMock()
     mock_conn.return_value.__exit__ = MagicMock(return_value=False)
@@ -157,7 +157,7 @@ def test_filter_alive_keeps_reachable(mock_conn):
 @patch("reachy_mini.utils.discovery.socket.create_connection", side_effect=OSError)
 def test_filter_alive_removes_unreachable(mock_conn):
     """_filter_alive removes robots that can't be reached."""
-    from dreambo.utils.discovery import _filter_alive
+    from dreambo_torso.utils.discovery import _filter_alive
 
     robot = DiscoveredRobot(
         name="stale", host="stale.local.", port=8000, addresses=["10.0.0.99"],

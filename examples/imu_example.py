@@ -11,7 +11,7 @@ Note: IMU is only available on the wireless version of Reachy Mini.
 import time
 from typing import cast
 
-from dreambo import Dreambo
+from dreambo_torso import Dreambo
 
 with Dreambo(media_backend="no_media") as mini:
     print("Starting IMU monitoring...")

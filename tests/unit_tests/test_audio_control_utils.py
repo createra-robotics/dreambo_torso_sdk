@@ -2,8 +2,8 @@
 
 import pytest
 
-from dreambo.media.audio_control_utils import PARAMETERS, init_respeaker_usb
-from dreambo.media.media_manager import MediaBackend, MediaManager
+from dreambo_torso.media.audio_control_utils import PARAMETERS, init_respeaker_usb
+from dreambo_torso.media.media_manager import MediaBackend, MediaManager
 
 AUDIO_CONFIG_PARAMETER_NAMES = ("PP_MIN_NS", "PP_NLATTENONOFF", "PP_MGSCALE")
 

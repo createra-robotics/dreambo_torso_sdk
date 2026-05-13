@@ -6,7 +6,7 @@ import numpy as np
 from placo_utils.visualization import robot_viz
 from dreambo_motor_controller import DreamboMotorController
 
-from dreambo.kinematics import PlacoKinematics
+from dreambo_torso.kinematics import PlacoKinematics
 
 
 def main():

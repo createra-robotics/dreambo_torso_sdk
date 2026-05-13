@@ -11,7 +11,7 @@ from typing import get_args
 
 from pydantic import BaseModel
 
-from dreambo.io.protocol import AnyCommand
+from dreambo_torso.io.protocol import AnyCommand
 
 # ---------------------------------------------------------------------------
 # Helpers

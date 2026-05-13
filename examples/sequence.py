@@ -20,7 +20,7 @@ import time
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-from dreambo import Dreambo
+from dreambo_torso import Dreambo
 
 
 def main() -> None:
