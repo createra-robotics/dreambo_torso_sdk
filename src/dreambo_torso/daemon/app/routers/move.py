@@ -14,7 +14,7 @@ from uuid import UUID, uuid4
 
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
-from huggingface_hub.errors import RepositoryNotFoundError
+from modelscope.hub.errors import NotExistError
 from pydantic import BaseModel
 
 from dreambo_torso.motion.recorded_move import RecordedMoves

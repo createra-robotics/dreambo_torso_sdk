@@ -136,7 +136,8 @@ async def list_available_apps() -> list[AppInfo]:
                 response.raise_for_status()
                 text = await response.text()
                 authorized_ids = json.loads(text)
-        except (aiohttp.ClientError, json.JSONDecodeError):
+        except (aiohttp.ClientError, asyncio.TimeoutError, OSError, json.JSONDecodeError) as exc:
+            logger.warning("Could not fetch HF app list (%s); returning empty list.", exc)
             return []
 
         if not isinstance(authorized_ids, list):
