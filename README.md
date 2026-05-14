@@ -210,7 +210,7 @@ DEFAULT_AUDIO_TARGET: Tuple[str, ...] = ("ReSpeaker",)
 2. For camera, edit VID|PID from `src/dreambo_torso/media/camera_constants.py`:
 
 ```python
-class ReachyMiniLiteCamSpecs(CameraSpecs):
+class DreamboTorsoCameraSpecs(CameraSpecs):
     """Dreambo Torso camera specifications."""
 
     name = "lite"
@@ -228,6 +228,22 @@ class ReachyMiniLiteCamSpecs(CameraSpecs):
 
 If a new camera still doesn't appear, run `gst-device-monitor-1.0 Video/Source` to confirm the exact display-name string
   GStreamer reports — it must contain the substring USB Camera for the match to fire.
+
+---
+
+## Calibration
+
+1. Calibrate servos by running the following command for example:
+
+```bash
+python -m dreambo_torso.tools.calibrate_motor left_arm_pitch
+```
+
+2. Write new parameters into servo's EEPROM:
+
+```bash
+python -m dreambo_torso.tools.setup_motor  src/dreambo_torso/assets/config/hardware_config.yaml left_arm_pitch /dev/ttyACM0 --update-config
+```
 
 ---
 
