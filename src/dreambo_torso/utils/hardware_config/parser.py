@@ -1,6 +1,6 @@
 """Module to parse Dreambo hardware configuration from a YAML file."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import yaml
 
@@ -20,6 +20,27 @@ class MotorConfig:
 
 
 @dataclass
+class ActuatorConfig:
+    """CAN actuator (Damiao DM-Jxxxx) configuration.
+
+    Limits are radians, not raw encoder ticks — the DM firmware works in SI
+    units. ``motor_model`` names a ``motorcom.MitLimits`` preset (``dm4310``,
+    ``dm4340p``, …) used to clamp the MIT setpoint.
+    """
+
+    bus: str
+    can_id: int
+    master_id: int
+    motor_model: str
+    offset: float
+    lower_limit: float
+    upper_limit: float
+    operating_mode: int
+    kp: float
+    kd: float
+
+
+@dataclass
 class SerialConfig:
     """Serial configuration."""
 
@@ -33,6 +54,7 @@ class DreamboConfig:
     version: str
     serial: SerialConfig
     motors: dict[str, MotorConfig]
+    actuators: dict[str, ActuatorConfig] = field(default_factory=dict)
 
 
 def parse_yaml_config(filename: str) -> DreamboConfig:
@@ -56,10 +78,27 @@ def parse_yaml_config(filename: str) -> DreamboConfig:
                 pid=params.get("pid"),
             )
 
+    actuators: dict[str, ActuatorConfig] = {}
+    for entry in conf.get("actuators") or []:
+        for name, params in entry.items():
+            actuators[name] = ActuatorConfig(
+                bus=params["bus"],
+                can_id=int(params["can_id"]),
+                master_id=int(params["master_id"]),
+                motor_model=str(params["motor_model"]),
+                offset=float(params.get("offset", 0.0)),
+                lower_limit=float(params["lower_limit"]),
+                upper_limit=float(params["upper_limit"]),
+                operating_mode=int(params.get("operating_mode", 0)),
+                kp=float(params["kp"]),
+                kd=float(params["kd"]),
+            )
+
     serial = SerialConfig(baudrate=conf["serial"]["baudrate"])
 
     return DreamboConfig(
         version=version,
         serial=serial,
         motors=motor_ids,
+        actuators=actuators,
     )
