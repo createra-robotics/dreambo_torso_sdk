@@ -15,6 +15,22 @@ from dreambo_torso.utils.interpolation import linear_pose_interpolation
 
 logger = logging.getLogger(__name__)
 
+
+class _ModelscopeRevisionFilter(logging.Filter):
+    """Silence ModelScope's harmless 'cannot confirm cached file revision' warning.
+
+    Fires on every ``dataset_snapshot_download(local_files_only=True)`` cache
+    hit; we don't gain anything from seeing it (revision is always ``master``
+    for these datasets) and it spams the daemon log.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "We can not confirm the cached file is for revision" not in record.getMessage()
+
+
+logging.getLogger("modelscope").addFilter(_ModelscopeRevisionFilter())
+
+
 # Default datasets to preload at daemon startup
 DEFAULT_DATASETS = [
     "tonylabs/dreambo-emotions-library",
