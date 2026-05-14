@@ -123,6 +123,7 @@ class RobotBackend(Backend):
         )  # seconds
 
         # Initialize IMU for wireless version
+        '''
         if wireless_version:
             try:
                 from bmi088 import BMI088
@@ -133,6 +134,8 @@ class RobotBackend(Backend):
                 self.bmi088 = None
         else:
             self.bmi088 = None
+        '''
+        self.bmi088 = None
 
     def run(self) -> None:
         """Run the control loop for the robot backend.
