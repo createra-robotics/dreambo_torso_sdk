@@ -22,7 +22,7 @@ import gi
 from dreambo_torso.media.camera_constants import (
     ArducamSpecs,
     CameraSpecs,
-    ReachyMiniLiteCamSpecs,
+    DreamboTorsoCameraSpecs,
     ReachyMiniWirelessCamSpecs,
 )
 
@@ -396,7 +396,7 @@ def _make_camera_specs(cam_name: str) -> CameraSpecs:
     """Return the appropriate ``CameraSpecs`` instance for a camera name."""
     if cam_name == "Arducam_12MP":
         return ArducamSpecs()
-    return ReachyMiniLiteCamSpecs()
+    return DreamboTorsoCameraSpecs()
 
 
 def find_video_device(

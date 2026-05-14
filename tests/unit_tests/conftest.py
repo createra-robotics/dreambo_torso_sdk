@@ -21,7 +21,7 @@ from dreambo_torso.daemon.utils import (
 from dreambo_torso.media.camera_constants import (
     CameraResolution,
     CameraSpecs,
-    ReachyMiniLiteCamSpecs,
+    DreamboTorsoCameraSpecs,
 )
 
 
@@ -76,7 +76,7 @@ def ipc_video_source(
 
     Gst.init([])
 
-    specs: CameraSpecs = cast(CameraSpecs, ReachyMiniLiteCamSpecs)
+    specs: CameraSpecs = cast(CameraSpecs, DreamboTorsoCameraSpecs)
 
     # Allow per-test resolution override via marker
     marker = request.node.get_closest_marker("ipc_resolution")

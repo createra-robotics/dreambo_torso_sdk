@@ -132,7 +132,7 @@ class MediaManager:
                 Only used with the ``WEBRTC`` backend.
             camera_specs: Camera specifications detected by the daemon.
                 When ``None`` the concrete camera class will fall back to
-                ``ReachyMiniLiteCamSpecs`` with a warning.
+                ``DreamboTorsoCameraSpecs`` with a warning.
             daemon_url: Base URL of the daemon's HTTP API
                 (e.g. ``"http://reachy-mini.local:8000"``).  Only used
                 with the ``WEBRTC`` backend for remote sound playback

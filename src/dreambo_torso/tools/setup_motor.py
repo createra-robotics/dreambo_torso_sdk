@@ -1,12 +1,79 @@
 """Motor setup script for the Dreambo torso.
 
-This script allows to configure the motors of the Dreambo torso by setting their ID, baudrate, offset, angle limits, return delay time, and removing the input voltage error.
+Writes the values from ``hardware_config.yaml`` into a FeeTech servo's EEPROM:
+ID, baudrate, offset, angle limits, return delay time, shutdown error mask,
+and operating mode. After writing, the script reads everything back to
+verify, then briefly flashes the motor LED as a visible confirmation.
 
-The motor needs to be configured one by one, so you will need to connect only one motor at a time to the serial port. You can specify which motor to configure by passing its name as an argument.
+All values in the YAML are in the motor's raw units.
 
-If not specified, it assumes the motor is in the factory settings (ID 1 and baudrate 1000000). If it's not the case, you will need to use a tool like FeeTech Debug Tool to first reset it or manually specify the ID and baudrate.
+Usage
+-----
+    python -m dreambo_torso.tools.setup_motor <config.yaml> <motor_name> <serial_port> [options]
 
-Please note that all values given in the configuration file are in the motor's raw units.
+Positional args (all required):
+    config.yaml  Path to the hardware config (typically
+                 ``src/dreambo_torso/assets/config/hardware_config.yaml``).
+    motor_name   One of: left_arm_pitch, left_arm_yaw, right_arm_pitch,
+                 right_arm_yaw, nose_top, nose_left, nose_right, or ``all``.
+    serial_port  e.g. ``/dev/ttyACM0`` (whatever ``calibrate_motor`` printed).
+
+Useful flags:
+    --from-id N         Current ID on the wire (default 1, the factory ID).
+    --from-baudrate N   Current baudrate (default 1_000_000).
+    --update-config     Shortcut: motor already has its target ID/baudrate;
+                        derive ``--from-id`` / ``--from-baudrate`` from the
+                        YAML and only reflash the other fields.
+    --check-only        Read-back verification only; writes nothing.
+
+Common flows
+------------
+1. **First-time setup** of a fresh motor (factory: ID=1, baud=1_000_000):
+
+       python -m dreambo_torso.tools.setup_motor \\
+           src/dreambo_torso/assets/config/hardware_config.yaml \\
+           left_arm_pitch /dev/ttyACM0
+
+2. **Reflash** after ``calibrate_motor`` (motor already configured, only
+   the new offset / limits need to land in EEPROM):
+
+       python -m dreambo_torso.tools.setup_motor \\
+           src/dreambo_torso/assets/config/hardware_config.yaml \\
+           left_arm_pitch /dev/ttyACM0 --update-config
+
+3. **Verify without writing**:
+
+       python -m dreambo_torso.tools.setup_motor \\
+           src/dreambo_torso/assets/config/hardware_config.yaml \\
+           left_arm_pitch /dev/ttyACM0 --check-only
+
+Typical per-motor pipeline:
+
+    # Find raw zero + limits, write them into hardware_config.yaml
+    python -m dreambo_torso.tools.calibrate_motor left_arm_pitch
+    # Push the YAML values into the motor's EEPROM
+    python -m dreambo_torso.tools.setup_motor \\
+        src/dreambo_torso/assets/config/hardware_config.yaml \\
+        left_arm_pitch /dev/ttyACM0 --update-config
+
+Gotchas
+-------
+* **One motor on the bus at a time.** Daisy-chained motors will collide on
+  the change-ID step. For ``all``, physically swap motors and re-run with an
+  explicit ``motor_name`` for each.
+* **Torque is disabled during setup** — the joint will be loose until the
+  run finishes; expect the LED flash at the end.
+* **"Device or resource busy" on a Raspberry Pi** is usually ModemManager
+  grabbing the USB-serial. Fix with either::
+
+      sudo systemctl disable --now ModemManager
+
+  or a udev rule pinning ``ID_MM_DEVICE_IGNORE=1`` on the CH343
+  (VID 1a86, PID 55d3).
+* **Non-factory ID/baudrate?** If the motor has been configured before but
+  you're not using ``--update-config``, pass ``--from-id`` and
+  ``--from-baudrate`` to match its current state. If those are unknown,
+  reset the motor with FeeTech Debug Tool first.
 """
 
 import argparse

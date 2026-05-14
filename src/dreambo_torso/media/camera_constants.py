@@ -10,17 +10,17 @@ The module provides:
 - Specific camera specifications for different camera models
 
 Example usage:
-    >>> from dreambo_torso.media.camera_constants import CameraResolution, ReachyMiniLiteCamSpecs
+    >>> from dreambo_torso.media.camera_constants import CameraResolution, DreamboTorsoCameraSpecs
     >>>
     >>> # Get available resolutions for Reachy Mini Lite Camera
     >>> print("Available resolutions:")
-    >>> for res in ReachyMiniLiteCamSpecs.available_resolutions:
+    >>> for res in DreamboTorsoCameraSpecs.available_resolutions:
     ...     width, height, fps, crop_factor = res.value
     ...     print(f"  {width}x{height}@{fps}fps")
     >>>
     >>> # Access camera calibration parameters
-    >>> print(f"Camera matrix:\\n{ReachyMiniLiteCamSpecs.K}")
-    >>> print(f"Distortion coefficients: {ReachyMiniLiteCamSpecs.D}")
+    >>> print(f"Camera matrix:\\n{DreamboTorsoCameraSpecs.K}")
+    >>> print(f"Distortion coefficients: {DreamboTorsoCameraSpecs.D}")
 """
 
 import logging
@@ -72,9 +72,9 @@ class CameraResolution(Enum):
         print(f"Resolution: {width}x{height}@{fps}fps")
 
         # Check if a resolution is supported by a camera
-        from dreambo_torso.media.camera_constants import ReachyMiniLiteCamSpecs
+        from dreambo_torso.media.camera_constants import DreamboTorsoCameraSpecs
         res = CameraResolution.R1920x1080at60fps
-        if res in ReachyMiniLiteCamSpecs.available_resolutions:
+        if res in DreamboTorsoCameraSpecs.available_resolutions:
             print("This resolution is supported")
         ```
 
@@ -196,17 +196,20 @@ class ArducamSpecs(CameraSpecs):
 
 
 @dataclass
-class ReachyMiniLiteCamSpecs(CameraSpecs):
+class DreamboTorsoCameraSpecs(CameraSpecs):
     """Dreambo Torso camera specifications."""
 
     name = "lite"
+    # HZ USB Camera (vendor 0x0ede, product 0x8093) supports MJPEG up to
+    # 2592x1944@30fps. YUY2 caps at 640x480@30fps / 1280x720@10fps /
+    # 1920x1080@5fps, so resolutions above 640x480 negotiate only when the
+    # GStreamer pipeline accepts MJPEG (image/jpeg).
     available_resolutions = [
-        CameraResolution.R1920x1080at60fps,
-        CameraResolution.R3840x2592at30fps,
-        CameraResolution.R3840x2160at30fps,
-        CameraResolution.R3264x2448at30fps,
+        CameraResolution.R1280x720at30fps,
+        CameraResolution.R1920x1080at30fps,
+        CameraResolution.R1600x1200at30fps,
     ]
-    default_resolution = CameraResolution.R1920x1080at60fps
+    default_resolution = CameraResolution.R1280x720at30fps
     # HZ USB Camera (Bus 002 Device 002: ID 0ede:8093)
     vid = 0x0EDE
     pid = 0x8093
@@ -246,7 +249,7 @@ class ReachyMiniLiteCamSpecs(CameraSpecs):
 
 
 @dataclass
-class ReachyMiniWirelessCamSpecs(ReachyMiniLiteCamSpecs):
+class ReachyMiniWirelessCamSpecs(DreamboTorsoCameraSpecs):
     """Reachy Mini Wireless camera specifications."""
 
     name = "wireless"
@@ -264,7 +267,7 @@ class ReachyMiniWirelessCamSpecs(ReachyMiniLiteCamSpecs):
 
 
 @dataclass
-class OlderRPiCamSpecs(ReachyMiniLiteCamSpecs):
+class OlderRPiCamSpecs(DreamboTorsoCameraSpecs):
     """Older Raspberry Pi camera specifications. Keeping for compatibility."""
 
     name = "older_rpi"
@@ -324,7 +327,7 @@ class GenericWebcamSpecs(CameraSpecs):
 # -- Lookup by name --------------------------------------------------------
 
 _SPECS_BY_NAME: dict[str, type[CameraSpecs]] = {
-    "lite": ReachyMiniLiteCamSpecs,
+    "lite": DreamboTorsoCameraSpecs,
     "wireless": ReachyMiniWirelessCamSpecs,
     "arducam": ArducamSpecs,
     "older_rpi": OlderRPiCamSpecs,
@@ -341,22 +344,22 @@ def get_camera_specs_by_name(name: str) -> CameraSpecs:
 
     Returns:
         The matching ``CameraSpecs`` instance.  Falls back to
-        ``ReachyMiniLiteCamSpecs`` with a warning if *name* is unknown
+        ``DreamboTorsoCameraSpecs`` with a warning if *name* is unknown
         or empty (e.g. older daemon that doesn't report specs).
 
     """
     if not name:
         _logger.warning(
             "Empty camera_specs_name received (older daemon?) "
-            "— falling back to ReachyMiniLiteCamSpecs."
+            "— falling back to DreamboTorsoCameraSpecs."
         )
-        return ReachyMiniLiteCamSpecs()
+        return DreamboTorsoCameraSpecs()
 
     cls = _SPECS_BY_NAME.get(name)
     if cls is None:
         _logger.warning(
-            "Unknown camera specs name %r — falling back to ReachyMiniLiteCamSpecs.",
+            "Unknown camera specs name %r — falling back to DreamboTorsoCameraSpecs.",
             name,
         )
-        return ReachyMiniLiteCamSpecs()
+        return DreamboTorsoCameraSpecs()
     return cls()
