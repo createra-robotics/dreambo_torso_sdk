@@ -47,6 +47,7 @@ dependencies = [
     "pygobject-stubs>=2.17.0",
     "scipy-stubs>=1.15.3.0",
     "pycairo>=1.29.0",
+    "modelscope>=1.36.3",
 ]
 
 [project.optional-dependencies]
@@ -132,6 +133,10 @@ markers = [
     "wireless: mark test as requiring wireless Dreambo",
     "ipc_resolution: override the resolution used by the ipc_video_source fixture",
 ]
+
+[[tool.uv.index]]
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+default = true
 
 [tool.mypy]
 python_version = "3.12"

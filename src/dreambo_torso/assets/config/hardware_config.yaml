@@ -3,7 +3,7 @@ version: beta
 serial:
   baudrate: 1000000
 
-# Motors for Dreambo torso (dreambo_motor_controller).
+# Motors for Dreambo Torso (dreambo_motor_controller).
 # IDs and names must match dreambo_motor_controller's expected map:
 #   - Arms (SM40BL bus): IDs 1..4
 #   - Nose (STS3025BL bus): IDs 5..7
@@ -15,9 +15,9 @@ serial:
 motors:
   - left_arm_pitch:
       id: 1
-      offset: 2048
-      lower_limit: 0
-      upper_limit: 4095
+      offset: 3798
+      lower_limit: 3264
+      upper_limit: 4468
       return_delay_time: 0
       shutdown_error: 52
       operating_mode: 0 # Dynamixel XL330: 3 | FEETECH SMS/STS: 0
@@ -97,3 +97,52 @@ motors:
         - 100
         - 0
         - 0
+
+#Actuators:
+#DM-J4310-2EC   master_id=1, can_id=1   Neck Yaw
+#DM-J4340P-2EC  master_id=2, can_id=2   Neck Pitch
+#DM-J4340P-2EC  master_id=3, can_id=3   Neck Roll
+#CAN bus setup (Linux):
+#sudo ip link set can0 type can bitrate 1000000
+#sudo ip link set can0 up
+
+# Damiao DM-Jxxxx CAN actuators driven via motorcom (SocketCAN, MIT mode).
+# motor_model picks the MitLimits preset (p_max / v_max / kp_max / kd_max / t_max).
+# Order here is (yaw, pitch, roll); the daemon feeds these into
+# WAKE_UP_NECK_JOINT_POSITIONS / SLEEP_NECK_JOINT_POSITIONS in the same order.
+actuators:
+  - neck_yaw:
+      bus: can0
+      can_id: 1
+      master_id: 1
+      motor_model: dm4310 # DM-J4310-2EC
+      offset: 0.0
+      lower_limit: -0.5 # rad
+      upper_limit: 0.5 # rad
+      operating_mode: 0 # 0 = MIT
+      kp: 1.0
+      kd: 30.0
+
+  - neck_pitch:
+      bus: can0
+      can_id: 2
+      master_id: 2
+      motor_model: dm4340p # DM-J4340P-2EC
+      offset: 0.0
+      lower_limit: 0.0 # rad
+      upper_limit: 0.45 # rad
+      operating_mode: 0 # 0 = MIT
+      kp: 2.0
+      kd: 60.0
+
+  - neck_roll:
+      bus: can0
+      can_id: 3
+      master_id: 3
+      motor_model: dm4340p # DM-J4340P-2EC
+      offset: 0.0
+      lower_limit: -0.4 # rad
+      upper_limit: 0.4 # rad
+      operating_mode: 0 # 0 = MIT
+      kp: 2.0
+      kd: 60.0

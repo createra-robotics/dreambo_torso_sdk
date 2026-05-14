@@ -1,6 +1,6 @@
-# Reachy Mini Development Guide for AI Agents
+# Dreambo Torso SDK Development Guide for AI Agents
 
-This guide helps AI agents assist users in developing Reachy Mini applications.
+This guide helps AI agents assist users in developing Dreambo Torso applications.
 
 ---
 

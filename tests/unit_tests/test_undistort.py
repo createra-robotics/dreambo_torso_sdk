@@ -13,7 +13,7 @@ from dreambo_torso.media.camera_constants import (
     ArducamSpecs,
     GenericWebcamSpecs,
     MujocoCameraSpecs,
-    ReachyMiniLiteCamSpecs,
+    DreamboTorsoCameraSpecs,
 )
 from dreambo_torso.media.camera_utils import undistort_points
 
@@ -86,8 +86,8 @@ class TestUndistortPointsDistortion:
 
     def test_12_coeff_differs_from_pinhole(self) -> None:
         """With non-zero 12 distortion coeffs, result should differ from simple pinhole."""
-        K = ReachyMiniLiteCamSpecs.K
-        D = ReachyMiniLiteCamSpecs.D
+        K = DreamboTorsoCameraSpecs.K
+        D = DreamboTorsoCameraSpecs.D
         u, v = 500.0, 300.0
         x, y = undistort_points(u, v, K, D)
         x_pinhole = (u - K[0, 2]) / K[0, 0]
@@ -96,8 +96,8 @@ class TestUndistortPointsDistortion:
 
     def test_center_pixel_unaffected(self) -> None:
         """Principal point is always (0,0) in normalized coords, even with distortion."""
-        K = ReachyMiniLiteCamSpecs.K
-        D = ReachyMiniLiteCamSpecs.D
+        K = DreamboTorsoCameraSpecs.K
+        D = DreamboTorsoCameraSpecs.D
         cx, cy = K[0, 2], K[1, 2]
         x, y = undistort_points(cx, cy, K, D)
         np.testing.assert_allclose(x, 0.0, atol=1e-10)
@@ -163,8 +163,8 @@ class TestUndistortPointsVsOpenCV:
         1e-4 in normalized coordinates corresponds to sub-pixel accuracy,
         which is well within the precision needed for gaze direction.
         """
-        K = ReachyMiniLiteCamSpecs.K
-        D = ReachyMiniLiteCamSpecs.D
+        K = DreamboTorsoCameraSpecs.K
+        D = DreamboTorsoCameraSpecs.D
         x_ours, y_ours = undistort_points(u, v, K, D)
         x_cv2, y_cv2 = self._cv2_undistort(u, v, K, D)
         np.testing.assert_allclose(x_ours, x_cv2, atol=1e-4, rtol=1e-4)

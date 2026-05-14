@@ -54,9 +54,10 @@ SLEEP_HEAD_JOINT_POSITIONS = [
     1.0032234352772091,
 ]
 
-
 INIT_ANTENNAS_JOINT_POSITIONS = [-0.1745, 0.1745]  # ~10° offset to reduce shaking at vertical
+
 SLEEP_ANTENNAS_JOINT_POSITIONS = [-3.05, 3.05]
+
 SLEEP_HEAD_POSE = np.array(
     [
         [0.911, 0.004, 0.413, -0.021],
@@ -70,7 +71,7 @@ ConnectionMode = Literal["auto", "localhost_only", "network"]
 
 
 class Dreambo:
-    """Dreambo class for controlling a simulated or real Dreambo robot.
+    """DreamboTorso class for controlling a simulated or real robot torso.
 
     Args:
         robot_name: Name of the robot, defaults to "reachy_mini".

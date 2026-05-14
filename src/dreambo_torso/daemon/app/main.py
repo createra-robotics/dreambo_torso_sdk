@@ -19,7 +19,7 @@ from typing import Any, AsyncGenerator
 import uvicorn
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -254,6 +254,14 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+    # Placeholder favicon so browsers stop logging a 404 on /favicon.ico.
+    # The SVG is fine — browsers accept any image/* MIME for the tab icon.
+    FAVICON_PATH = STATIC_DIR / "assets" / "reachy-mini-awake.svg"
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    async def favicon() -> FileResponse:
+        return FileResponse(FAVICON_PATH, media_type="image/svg+xml")
 
     @app.get("/")
     async def dashboard(request: Request) -> HTMLResponse:

@@ -56,7 +56,7 @@ from dreambo_torso.media.camera_base import CameraBase
 from dreambo_torso.media.camera_constants import (
     CameraResolution,
     CameraSpecs,
-    ReachyMiniLiteCamSpecs,
+    DreamboTorsoCameraSpecs,
 )
 from dreambo_torso.media.gstreamer_utils import get_sample
 
@@ -91,7 +91,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
             signaling_host: Host address of the signaling server.
             signaling_port: Port of the signaling server.
             camera_specs: Camera specifications detected by the daemon.
-                When ``None`` falls back to ``ReachyMiniLiteCamSpecs``
+                When ``None`` falls back to ``DreamboTorsoCameraSpecs``
                 with a warning.
 
         """
@@ -122,9 +122,9 @@ class GstWebRTCClient(CameraBase, AudioBase):
             self.camera_specs: CameraSpecs = camera_specs
         else:
             self.logger.warning(
-                "No camera_specs provided — defaulting to ReachyMiniLiteCamSpecs."
+                "No camera_specs provided — defaulting to DreamboTorsoCameraSpecs."
             )
-            self.camera_specs = ReachyMiniLiteCamSpecs()
+            self.camera_specs = DreamboTorsoCameraSpecs()
         self._resolution: Optional[CameraResolution] = None
         self.resized_K: Optional[npt.NDArray[np.float64]] = self.camera_specs.K
 

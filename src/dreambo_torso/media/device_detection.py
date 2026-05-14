@@ -22,7 +22,7 @@ import gi
 from dreambo_torso.media.camera_constants import (
     ArducamSpecs,
     CameraSpecs,
-    ReachyMiniLiteCamSpecs,
+    DreamboTorsoCameraSpecs,
     ReachyMiniWirelessCamSpecs,
 )
 
@@ -33,7 +33,14 @@ from gi.repository import Gst  # noqa: E402
 _logger = logging.getLogger(__name__)
 
 # Default camera name priority order used by ``find_video_device``.
-DEFAULT_CAM_NAMES: Sequence[str] = ("Arducam_12MP", "imx708")
+# "USB Camera: USB camera" is the GStreamer display name for the HZ USB Camera
+# (vendor 0x0ede, product 0x8093) used as the Dreambo Torso "lite" camera.
+DEFAULT_CAM_NAMES: Sequence[str] = (
+    "USB Camera: USB camera",
+    "Arducam_12MP",
+    "imx708",
+)
+
 DEFAULT_AUDIO_TARGET: Tuple[str, ...] = ("ReSpeaker",)
 
 
@@ -389,7 +396,7 @@ def _make_camera_specs(cam_name: str) -> CameraSpecs:
     """Return the appropriate ``CameraSpecs`` instance for a camera name."""
     if cam_name == "Arducam_12MP":
         return ArducamSpecs()
-    return ReachyMiniLiteCamSpecs()
+    return DreamboTorsoCameraSpecs()
 
 
 def find_video_device(
@@ -436,7 +443,16 @@ def find_video_device(
                         device_path = props["api.v4l2.path"]
                         _logger.debug("Found %s camera at %s", cam_name, device_path)
                         return device_path, _make_camera_specs(cam_name)
-                    elif cam_name == "imx708":
+                    # Fallback for raw V4L2 (non-PipeWire) device monitors,
+                    # which expose the node as ``device.path`` instead.
+                    if (
+                        props.get("device.api") == "v4l2"
+                        and "device.path" in props
+                    ):
+                        device_path = props["device.path"]
+                        _logger.debug("Found %s camera at %s", cam_name, device_path)
+                        return device_path, _make_camera_specs(cam_name)
+                    if cam_name == "imx708":
                         _logger.debug("Found %s camera (CSI)", cam_name)
                         return cam_name, ReachyMiniWirelessCamSpecs()
                 case "Windows":

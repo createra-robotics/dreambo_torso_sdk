@@ -14,10 +14,10 @@ import argparse
 from dreambo_torso import Dreambo
 from dreambo_torso.motion.recorded_move import RecordedMove, RecordedMoves
 
-# Keep compatibility with the original library flag while allowing custom datasets.
+# ModelScope dataset IDs; pass --dataset to override with a custom one.
 LIBRARY_DATASETS = {
-    "dance": "pollen-robotics/reachy-mini-dances-library",
-    "emotions": "pollen-robotics/reachy-mini-emotions-library",
+    "dance": "tonylabs/dreambo-dance-library",
+    "emotions": "tonylabs/dreambo-emotions-library",
 }
 
 
@@ -25,7 +25,7 @@ def main(dataset_path: str) -> None:
     """Connect to Reachy and run the main demonstration loop."""
     recorded_moves = RecordedMoves(dataset_path)
 
-    print("Connecting to Reachy Mini...")
+    print("Connecting to Dreambo Torso...")
     with Dreambo() as reachy:
         print("Connection successful! Starting dance sequence...\n")
         try:
@@ -41,7 +41,7 @@ def main(dataset_path: str) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Demonstrate and play all available dance moves for Reachy Mini."
+        description="Demonstrate and play all available dance moves for Dreambo Torso."
     )
     parser.add_argument(
         "-l",

@@ -9,7 +9,7 @@ from dreambo_torso.media.camera_constants import (
     CameraResolution,
     CameraSpecs,
     MujocoCameraSpecs,
-    ReachyMiniLiteCamSpecs,
+    DreamboTorsoCameraSpecs,
 )
 from dreambo_torso.media.media_manager import MediaBackend, MediaManager
 
@@ -130,7 +130,7 @@ def test_change_resolution_errors(backend: MediaBackend) -> None:
     # with pytest.raises(RuntimeError):
     #     media.camera.set_resolution(CameraResolution.R1280x720at30fps)
 
-    media.camera.camera_specs = ReachyMiniLiteCamSpecs()
+    media.camera.camera_specs = DreamboTorsoCameraSpecs()
     with pytest.raises(ValueError):
         media.camera.set_resolution(CameraResolution.R1280x720at30fps)
 

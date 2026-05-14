@@ -42,7 +42,7 @@ from dreambo_torso.media.camera_constants import (
     CameraSpecs,
     GenericWebcamSpecs,
     MujocoCameraSpecs,
-    ReachyMiniLiteCamSpecs,
+    DreamboTorsoCameraSpecs,
 )
 from dreambo_torso.media.device_detection import get_audio_device, get_video_device
 from dreambo_torso.utils.constants import ASSETS_ROOT_PATH
@@ -110,7 +110,7 @@ class GstMediaServer:
                     self._logger.warning(
                         "No camera found. Video will not be available."
                     )
-                    self.camera_specs = ReachyMiniLiteCamSpecs()
+                    self.camera_specs = DreamboTorsoCameraSpecs()
                 else:
                     self.camera_specs = detected_specs
 
@@ -169,7 +169,7 @@ class GstMediaServer:
             )
 
         meta_structure = Gst.Structure.new_empty("meta")
-        meta_structure.set_value("name", "reachymini")
+        meta_structure.set_value("name", "dreambo_torso")
         webrtcsink.set_property("meta", meta_structure)
         webrtcsink.set_property("run-signalling-server", True)
 
@@ -986,9 +986,11 @@ class GstMediaServer:
             else:
                 audiosink = Gst.ElementFactory.make("pulsesink")
                 audiosink.set_property("device", f"{id_audio_card}")
+                '''
                 self._logger.info(
                     f"Using PulseAudio/PipeWire device {id_audio_card} for playback."
                 )
+                '''
             return audiosink
 
         return Gst.ElementFactory.make("autoaudiosink")

@@ -8,29 +8,44 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 import numpy.typing as npt
-from huggingface_hub import snapshot_download
-from huggingface_hub.errors import LocalEntryNotFoundError
+from modelscope.hub.snapshot_download import dataset_snapshot_download
 
 from dreambo_torso.motion.move import Move
 from dreambo_torso.utils.interpolation import linear_pose_interpolation
 
 logger = logging.getLogger(__name__)
 
+
+class _ModelscopeRevisionFilter(logging.Filter):
+    """Silence ModelScope's harmless 'cannot confirm cached file revision' warning.
+
+    Fires on every ``dataset_snapshot_download(local_files_only=True)`` cache
+    hit; we don't gain anything from seeing it (revision is always ``master``
+    for these datasets) and it spams the daemon log.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "We can not confirm the cached file is for revision" not in record.getMessage()
+
+
+logging.getLogger("modelscope").addFilter(_ModelscopeRevisionFilter())
+
+
 # Default datasets to preload at daemon startup
 DEFAULT_DATASETS = [
-    "pollen-robotics/reachy-mini-emotions-library",
-    "pollen-robotics/reachy-mini-dances-library",
+    "tonylabs/dreambo-emotions-library",
+    "tonylabs/dreambo-dance-library",
 ]
 
 
 def preload_dataset(dataset_name: str) -> str | None:
-    """Pre-download a HuggingFace dataset to local cache.
+    """Pre-download a ModelScope dataset to local cache.
 
     This function downloads the dataset with network access, so it should be
     called during daemon startup (not during playback) to avoid blocking.
 
     Args:
-        dataset_name: The HuggingFace dataset name (e.g., "pollen-robotics/reachy-mini-emotions-library")
+        dataset_name: The ModelScope dataset name (e.g., "tonylabs/dreambo-emotions-library")
 
     Returns:
         The local path to the cached dataset, or None if download failed.
@@ -38,7 +53,7 @@ def preload_dataset(dataset_name: str) -> str | None:
     """
     try:
         logger.info(f"Pre-downloading dataset: {dataset_name}")
-        local_path: str = snapshot_download(dataset_name, repo_type="dataset")
+        local_path: str = dataset_snapshot_download(dataset_name)
         logger.info(f"Dataset {dataset_name} cached at: {local_path}")
         return local_path
     except Exception as e:
@@ -154,32 +169,30 @@ class RecordedMove(Move):
 
 
 class RecordedMoves:
-    """Load a library of recorded moves from a HuggingFace dataset.
+    """Load a library of recorded moves from a ModelScope dataset.
 
     Uses local cache only to avoid blocking network calls during playback.
     The dataset should be pre-downloaded at daemon startup via preload_default_datasets().
     If not cached, falls back to network download (which may cause delays).
     """
 
-    def __init__(self, hf_dataset_name: str):
+    def __init__(self, ms_dataset_name: str):
         """Initialize RecordedMoves."""
-        self.hf_dataset_name = hf_dataset_name
+        self.ms_dataset_name = ms_dataset_name
         # Try local cache first (instant, no network)
         try:
-            self.local_path = snapshot_download(
-                self.hf_dataset_name,
-                repo_type="dataset",
+            self.local_path = dataset_snapshot_download(
+                self.ms_dataset_name,
                 local_files_only=True,
             )
-        except LocalEntryNotFoundError:
+        except Exception:
             # Fallback: download from network (slow, but ensures it works)
             logger.warning(
-                f"Dataset {hf_dataset_name} not in cache, downloading from HuggingFace. "
+                f"Dataset {ms_dataset_name} not in cache, downloading from ModelScope. "
                 "This may take a moment. Consider pre-loading datasets at daemon startup."
             )
-            self.local_path = snapshot_download(
-                self.hf_dataset_name,
-                repo_type="dataset",
+            self.local_path = dataset_snapshot_download(
+                self.ms_dataset_name,
             )
         self.moves: Dict[str, Any] = {}
         self.sounds: Dict[str, Optional[Path]] = {}
@@ -210,7 +223,7 @@ class RecordedMoves:
         """Get a recorded move by name."""
         if move_name not in self.moves:
             raise ValueError(
-                f"Move {move_name} not found in recorded moves library {self.hf_dataset_name}"
+                f"Move {move_name} not found in recorded moves library {self.ms_dataset_name}"
             )
 
         return RecordedMove(self.moves[move_name], self.sounds[move_name])
