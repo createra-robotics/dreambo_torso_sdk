@@ -198,6 +198,39 @@ Restart dreambo-torso-daemon
 
 ---
 
+## Customize Devices
+
+1. Run `gst-device-monitor-1.0 Video/Source` to confirm the exact display-name string and edit `src/dreambo_torso/media/device_detection.py`:
+
+```python
+DEFAULT_CAM_NAMES: Sequence[str] = ("USB Camera", "Arducam_12MP", "imx708")
+DEFAULT_AUDIO_TARGET: Tuple[str, ...] = ("ReSpeaker",)
+```
+
+2. For camera, edit VID|PID from `src/dreambo_torso/media/camera_constants.py`:
+
+```python
+class ReachyMiniLiteCamSpecs(CameraSpecs):
+    """Dreambo Torso camera specifications."""
+
+    name = "lite"
+    available_resolutions = [
+        CameraResolution.R1920x1080at60fps,
+        CameraResolution.R3840x2592at30fps,
+        CameraResolution.R3840x2160at30fps,
+        CameraResolution.R3264x2448at30fps,
+    ]
+    default_resolution = CameraResolution.R1920x1080at60fps
+    # HZ USB Camera (Bus 002 Device 002: ID 0ede:8093)
+    vid = 0x0EDE
+    pid = 0x8093
+```
+
+If a new camera still doesn't appear, run `gst-device-monitor-1.0 Video/Source` to confirm the exact display-name string
+  GStreamer reports — it must contain the substring USB Camera for the match to fire.
+
+---
+
 ## Mujuco Simulation
 
 The MuJoCo **mujoco==3.3.0** extra must be installed:

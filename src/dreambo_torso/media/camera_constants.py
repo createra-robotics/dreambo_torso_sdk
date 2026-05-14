@@ -1,7 +1,7 @@
-r"""Camera constants for Reachy Mini.
+r"""Camera constants for Dreambo Torso.
 
 This module defines camera specifications and resolutions for various camera models
-used with the Reachy Mini robot. It includes camera calibration parameters,
+used with the Dreambo robot. It includes camera calibration parameters,
 supported resolutions, and camera identification information.
 
 The module provides:
@@ -197,7 +197,7 @@ class ArducamSpecs(CameraSpecs):
 
 @dataclass
 class ReachyMiniLiteCamSpecs(CameraSpecs):
-    """Reachy Mini Lite camera specifications."""
+    """Dreambo Torso camera specifications."""
 
     name = "lite"
     available_resolutions = [
@@ -207,8 +207,11 @@ class ReachyMiniLiteCamSpecs(CameraSpecs):
         CameraResolution.R3264x2448at30fps,
     ]
     default_resolution = CameraResolution.R1920x1080at60fps
-    vid = 0x38FB
-    pid = 0x1002
+    # HZ USB Camera (Bus 002 Device 002: ID 0ede:8093)
+    vid = 0x0EDE
+    pid = 0x8093
+    # vid = 0x38FB
+    # pid = 0x1002
     # K = np.array(
     # [
     # [821.515, 0.0, 962.241],
