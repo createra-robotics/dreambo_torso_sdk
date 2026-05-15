@@ -40,9 +40,9 @@ from dreambo_torso.media.audio_control_utils import init_respeaker_usb
 from dreambo_torso.media.audio_utils import has_reachymini_asoundrc
 from dreambo_torso.media.camera_constants import (
     CameraSpecs,
+    DreamboTorsoCameraSpecs,
     GenericWebcamSpecs,
     MujocoCameraSpecs,
-    DreamboTorsoCameraSpecs,
 )
 from dreambo_torso.media.device_detection import get_audio_device, get_video_device
 from dreambo_torso.utils.constants import ASSETS_ROOT_PATH
