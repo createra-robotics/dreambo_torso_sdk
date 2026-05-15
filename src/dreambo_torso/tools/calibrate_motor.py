@@ -84,18 +84,12 @@ def _make_controller(port: str, motor_id: int, baudrate: int, bits: int):
 
 
 def _unwrap(value) -> int:
-    """Unwrap a servocom read_* return value.
-
-    Older versions returned ``int`` or ``(value, status)`` tuples; servocom
-    1.1+ returns a list like ``[value, status]``. Handle all three shapes.
-    """
-    if isinstance(value, (tuple, list)):
+    """Unwrap a servocom read_* return value (which can be a list, tuple, or scalar)."""
+    if isinstance(value, (list, tuple)):
+        if not value:
+            raise ValueError("servocom returned an empty result")
         return int(value[0])
     return int(value)
-
-
-def _read_position(controller, motor_id: int) -> int:
-    return _unwrap(controller.read_raw_present_position(motor_id))
 
 
 def _prompt(msg: str, default: str = "y") -> str:
@@ -103,20 +97,44 @@ def _prompt(msg: str, default: str = "y") -> str:
     return raw or default
 
 
-def _capture_position(controller, motor_id: int, label: str) -> Optional[int]:
+def _explain_error(e: Exception) -> str:
+    """Add a helpful hint for common serial-port errors."""
+    msg = str(e)
+    low = msg.lower()
+    if "permission denied" in low:
+        return (
+            f"{msg}\n      Hint: add your user to the 'dialout' group:\n"
+            f"        sudo usermod -aG dialout $USER  (then log out + back in)"
+        )
+    if "busy" in low or "ebusy" in low:
+        return (
+            f"{msg}\n      Hint: the serial port is held by another process. "
+            "Check with `lsof /dev/ttyACM0` (or ttyUSB0) and stop the other process."
+        )
+    if "no such file" in low or "enoent" in low:
+        return f"{msg}\n      Hint: the motor was disconnected mid-session."
+    return msg
+
+
+def _capture_position(c, motor_id: int, label: str) -> Optional[int]:
     """Loop: prompt -> read -> confirm. Returns the confirmed raw value or None to skip."""
     while True:
         input(
             f"  -> Move the joint to its {label} position, then press Enter to record. "
         )
         try:
-            pos = _read_position(controller, motor_id)
+            pos = _unwrap(c.read_present_position(motor_id))
         except Exception as e:
-            print(f"    [ERROR] Failed to read position: {e}")
+            print(f"    [ERROR] Failed to read position: {_explain_error(e)}")
             if _prompt("    Retry? [Y/n]: ") in ("n", "no"):
                 return None
             continue
-        print(f"    Recorded raw position: {pos}")
+        if not 0 <= pos <= 4095:
+            print(
+                f"    [WARN] Position {pos} is outside the 12-bit encoder range [0, 4095]. "
+                "Check servocom version (>=1.1.0 required)."
+            )
+        print(f"    Recorded encoder count: {pos}")
         ans = _prompt(
             f"    Accept {pos} as '{label}'? [Y]es / [r]etry / [s]kip: ",
             default="y",
@@ -140,17 +158,22 @@ def calibrate_motor(
     print(f"Motor: {motor_name}  (ID={motor_config.id}, baudrate={baudrate})")
     print("=" * 60)
 
-    # One controller for the whole motor — the underlying serial port is
-    # opened in __init__ and has no close(); creating a second controller
-    # for the same port would fail with EBUSY.
+    # One controller for the whole motor session — opening the port multiple
+    # times in quick succession fails with EBUSY because pyserial holds an
+    # exclusive lock.
     try:
         c = _make_controller(port, motor_config.id, baudrate, READ_BITS)
+    except Exception as e:
+        print(f"[FAIL] Could not open serial port: {_explain_error(e)}")
+        return None
+
+    try:
         if not c.ping(motor_config.id):
             print(f"[FAIL] Motor with ID {motor_config.id} did not respond on {port}.")
             return None
         print(f"[OK] Motor with ID {motor_config.id} is online.")
     except Exception as e:
-        print(f"[FAIL] Could not reach motor: {e}")
+        print(f"[FAIL] Could not reach motor: {_explain_error(e)}")
         return None
 
     # Disable torque so the user can move the joint by hand.
@@ -158,7 +181,7 @@ def calibrate_motor(
         c.write_torque_enable(motor_config.id, False)
         print("[OK] Torque disabled — joint is now free to move by hand.")
     except Exception as e:
-        print(f"[WARN] Could not disable torque: {e}. The joint may resist movement.")
+        print(f"[WARN] Could not disable torque: {_explain_error(e)}")
 
     zero = _capture_position(c, motor_config.id, "ZERO (mechanical center)")
     if zero is None:
