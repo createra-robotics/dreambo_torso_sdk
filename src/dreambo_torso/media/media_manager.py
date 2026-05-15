@@ -218,7 +218,7 @@ class MediaManager:
         from dreambo_torso.media.webrtc_utils import find_producer_peer_id_by_name
 
         peer_id = find_producer_peer_id_by_name(
-            signalling_host, signalling_port, "reachymini"
+            signalling_host, signalling_port, "dreambo_torso"
         )
 
         webrtc_media = GstWebRTCClient(

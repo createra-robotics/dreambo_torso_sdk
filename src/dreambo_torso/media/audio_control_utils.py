@@ -133,7 +133,10 @@ PARAMETERS = {
     "LED_SPEED": (20, 15, 1, "rw", "uint8"),
     "LED_COLOR": (20, 16, 1, "rw", "uint32"),
     "LED_DOA_COLOR": (20, 17, 2, "rw", "uint32"),
-    "DOA_VALUE": (20, 18, 2, "ro", "uint32"),
+    # XVF3800: response is 5 bytes (1 status + 2 little-endian uint16) where
+    # the first uint16 is the angle in DEGREES and the second carries the
+    # speech-detected flag in its low byte.
+    "DOA_VALUE": (20, 18, 2, "ro", "uint16"),
     "DOA_VALUE_RADIANS": (20, 19, 2, "ro", "radians"),
     # PP_RESID commands
     "PP_CURRENT_IDLE_TIME": (17, 70, 1, "ro", "uint32"),
@@ -260,6 +263,8 @@ class ReSpeaker:
         data_type = data[4]  # data type
         if data_type == "uint8" or data_type == "char":
             length = data_cnt + 1  # 1 byte for status
+        elif data_type == "uint16":
+            length = data_cnt * 2 + 1  # 1 byte for status
         elif (
             data_type == "float"
             or data_type == "radians"
@@ -312,6 +317,9 @@ class ReSpeaker:
             byte_data = response.tobytes()
             # Remove status byte and null terminators
             result = byte_data[1:].rstrip(b"\x00").decode("utf-8", errors="ignore")
+        elif data_type == "uint16":
+            byte_data = response.tobytes()
+            result = list(struct.unpack("<" + "H" * data_cnt, byte_data[1:]))
         elif data_type == "radians" or data_type == "float":
             byte_data = response.tobytes()
             match_str = "<"
@@ -543,6 +551,12 @@ def init_respeaker_usb() -> Optional[ReSpeaker]:
         if dev is None:
             dev = usb.core.find(
                 idVendor=0x2886, idProduct=0x0019, backend=get_libusb1_backend()
+            )
+
+        # Then try Seeed reSpeaker Flex XVF3800 (XMOS XVF3800)
+        if dev is None:
+            dev = usb.core.find(
+                idVendor=0x2886, idProduct=0x001E, backend=get_libusb1_backend()
             )
 
         # Finally try old ReSpeaker firmware

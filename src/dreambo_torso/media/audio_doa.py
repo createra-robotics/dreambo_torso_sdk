@@ -16,13 +16,46 @@ Note:
 """
 
 import logging
-from typing import Optional
+import math
+from typing import Callable, Optional
 
 import usb.core
 
 from dreambo_torso.media.audio_control_utils import ReSpeaker, init_respeaker_usb
 
 logger = logging.getLogger(__name__)
+
+# DoA reader: takes the raw response list and returns (angle_rad, speech).
+# Returning None signals "this firmware doesn't speak this variant", so the
+# probe loop should move on to the next reader.
+DoAReader = Callable[[list], Optional[tuple[float, bool]]]
+
+
+def _read_radians_variant(result: list) -> Optional[tuple[float, bool]]:
+    # Older Reachy Mini Audio (38FB:1001) firmware: cmdid 19 returns
+    # (angle_radians: float, speech_detected: float-as-bool).
+    if result is None or len(result) < 2:
+        return None
+    return float(result[0]), bool(result[1])
+
+
+def _read_degrees_variant(result: list) -> Optional[tuple[float, bool]]:
+    # XVF3800 firmware (2886:001E and friends): cmdid 18 returns two
+    # little-endian uint16 values; the first is degrees, the second
+    # carries the speech-detected flag in its low byte.
+    if result is None or len(result) < 2:
+        return None
+    return math.radians(int(result[0])), bool(int(result[1]) & 0xFF)
+
+
+# Ordered list of (PARAMETERS key, decoder). The first entry that the
+# firmware accepts wins and is cached for subsequent reads. We try the
+# radian variant first so older firmware that supports both still gets
+# the higher-precision native-radian answer.
+_DOA_VARIANTS: tuple[tuple[str, DoAReader], ...] = (
+    ("DOA_VALUE_RADIANS", _read_radians_variant),
+    ("DOA_VALUE", _read_degrees_variant),
+)
 
 
 class AudioDoA:
@@ -46,11 +79,26 @@ class AudioDoA:
     def __init__(self) -> None:
         """Initialize the DoA helper, probing for a ReSpeaker USB device."""
         self._respeaker: Optional[ReSpeaker] = init_respeaker_usb()
-        # Some XU316 ReSpeaker Lite firmwares STALL the XVF DoA control
-        # transfer because they use a different vendor-tuning protocol than
-        # the XVF3800 firmware this SDK was authored against. Track that
-        # state so we stop hammering the device once we know it can't answer.
+        # Cached (parameter_name, decoder) chosen on the first successful
+        # read. ``None`` means "not yet probed". If every variant fails
+        # ``_doa_unsupported`` is latched so we don't spam the bus.
+        self._doa_variant: Optional[tuple[str, DoAReader]] = None
         self._doa_unsupported: bool = False
+
+    def _try_variant(
+        self, name: str, decoder: DoAReader
+    ) -> Optional[tuple[float, bool]]:
+        """Issue one read with *name* and return its decoded reading, or None."""
+        assert self._respeaker is not None
+        try:
+            raw = self._respeaker.read(name)
+        except usb.core.USBError:
+            # LIBUSB_ERROR_PIPE = firmware STALLed (variant not implemented).
+            return None
+        except ValueError:
+            # Unknown status byte from the device protocol.
+            return None
+        return decoder(raw)
 
     def get_DoA(self) -> tuple[float, bool] | None:
         """Read the current Direction of Arrival from the ReSpeaker.
@@ -64,26 +112,29 @@ class AudioDoA:
         if not self._respeaker or self._doa_unsupported:
             return None
 
-        try:
-            result = self._respeaker.read("DOA_VALUE_RADIANS")
-        except usb.core.USBError as e:
-            # ERRNO 32 == LIBUSB_ERROR_PIPE (device STALLed the request) =>
-            # firmware doesn't speak the XVF tuning protocol the dreambo_torso
-            # SDK expects. Latch the flag so we don't spam the bus.
-            self._doa_unsupported = True
-            logging.getLogger(__name__).warning(
-                "ReSpeaker firmware rejected the DoA vendor request "
-                "(%s). Disabling DoA on this device.", e
-            )
-            return None
-        except ValueError:
-            # Read protocol error (unknown status byte). Treat the same way.
-            self._doa_unsupported = True
-            return None
+        # Fast path: we've already discovered which variant this firmware
+        # speaks. Reuse it without probing.
+        if self._doa_variant is not None:
+            name, decoder = self._doa_variant
+            return self._try_variant(name, decoder)
 
-        if result is None:
-            return None
-        return float(result[0]), bool(result[1])
+        # Cold path: probe each variant until one returns a reading.
+        for name, decoder in _DOA_VARIANTS:
+            reading = self._try_variant(name, decoder)
+            if reading is not None:
+                self._doa_variant = (name, decoder)
+                logger.info(
+                    "ReSpeaker DoA protocol resolved to %s.", name
+                )
+                return reading
+
+        # No variant worked — disable to avoid hammering the bus.
+        self._doa_unsupported = True
+        logger.warning(
+            "ReSpeaker firmware did not respond to any known DoA vendor "
+            "request. Disabling DoA on this device."
+        )
+        return None
 
     def close(self) -> None:
         """Release the USB resource."""
@@ -94,7 +145,6 @@ class AudioDoA:
 
 def main() -> None:
     """Poll Direction of Arrival at ~10 Hz and print results."""
-    import math
     import time
 
     logging.basicConfig(level=logging.INFO)

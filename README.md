@@ -198,7 +198,7 @@ Restart dreambo-torso-daemon
 
 ---
 
-## Customize Devices
+## Customize Video Devices
 
 1. Run `gst-device-monitor-1.0 Video/Source` to confirm the exact display-name string and edit `src/dreambo_torso/media/device_detection.py`:
 
@@ -228,6 +228,25 @@ class DreamboTorsoCameraSpecs(CameraSpecs):
 
 If a new camera still doesn't appear, run `gst-device-monitor-1.0 Video/Source` to confirm the exact display-name string
   GStreamer reports — it must contain the substring USB Camera for the match to fire.
+
+---
+
+## Audio Device Customizations
+
+1. Run the following command to confirm the exact display-name string
+
+```bash
+gst-device-monitor-1.0 Audio/Source 2>/dev/null | grep -E "^\s*(name|class|node\.name|device\.api|api\.alsa\.card\.name|device\.product\.name)"
+```
+
+2. Run the `lsusb` command to find out VID:PID:
+
+```bash
+lsusb | grep -iE "seeed|xmos|respeaker|xvf"
+
+# return
+Bus 004 Device 002: ID 2886:001e Seeed Technology Co., Ltd. reSpeaker Flex XVF3800 C16K6Ch
+```
 
 ---
 

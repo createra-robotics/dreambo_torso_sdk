@@ -862,7 +862,7 @@ class GstMediaServer:
             return audiosrc
 
         self._logger.warning(
-            "No Reachy Mini audio card found, using default audio source."
+            "No audio card found, using default audio source."
         )
         return Gst.ElementFactory.make("autoaudiosrc")
 

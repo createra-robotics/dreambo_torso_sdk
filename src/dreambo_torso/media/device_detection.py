@@ -321,9 +321,14 @@ def find_audio_device(
     targets: Tuple[str, ...] = (
         (target_name,) if isinstance(target_name, str) else tuple(target_name)
     )
+    # Vendors are inconsistent with casing (e.g. the XVF3800 reports itself
+    # as "reSpeaker" while older boards use "ReSpeaker"), so match
+    # case-insensitively.
+    targets_lower: Tuple[str, ...] = tuple(t.lower() for t in targets)
 
     for device in devices:
-        if not any(t in device.display_name for t in targets):
+        display_name_lower = device.display_name.lower()
+        if not any(t in display_name_lower for t in targets_lower):
             continue
 
         props = device.properties
