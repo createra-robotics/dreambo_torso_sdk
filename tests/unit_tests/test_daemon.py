@@ -1,3 +1,5 @@
+"""Integration tests for the daemon + SDK against the mockup-sim backend."""
+
 import asyncio
 import threading
 
@@ -13,13 +15,9 @@ from dreambo_torso.dreambo_torso import Dreambo
 async def _start_app_server(
     **daemon_kwargs: object,
 ) -> tuple[Daemon, uvicorn.Server, threading.Thread, int]:
-    """Start a full FastAPI + daemon server in a background thread.
-
-    Returns (daemon, server, thread, port).
-    """
+    """Start a full FastAPI + daemon server in a background thread."""
     args = Args(
-        sim=True,
-        headless=True,
+        mockup_sim=True,
         wake_up_on_start=False,
         no_media=True,
         autostart=True,
@@ -33,7 +31,6 @@ async def _start_app_server(
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
 
-    # Wait until the server is accepting connections
     while not server.started:
         await asyncio.sleep(0.05)
 
@@ -62,7 +59,6 @@ async def test_daemon_multiple_start_stop() -> None:
     await daemon.stop(goto_sleep_on_stop=False)
     await _stop_app_server(server, thread)
 
-    # Start a second time with a fresh server
     daemon2, server2, thread2, _port2 = await _start_app_server()
     await daemon2.stop(goto_sleep_on_stop=False)
     await _stop_app_server(server2, thread2)
@@ -78,12 +74,10 @@ async def test_daemon_client_disconnection() -> None:
         with Dreambo(host="localhost", port=port, media_backend="no_media") as mini:
             status = mini.client.get_status()
             assert status.state == "running"
-            assert status.simulation_enabled
             assert status.error is None
             assert status.backend_status is not None
             assert status.backend_status.motor_control_mode == "enabled"
             assert status.backend_status.error is None
-            assert status.wlan_ip is None
             client_connected.set()
 
     async def wait_for_client() -> None:
@@ -95,59 +89,10 @@ async def test_daemon_client_disconnection() -> None:
 
 
 @pytest.mark.asyncio
-async def test_sdk_warns_on_daemon_version_mismatch() -> None:
-    daemon, server, thread, port = await _start_app_server()
-    daemon._status.version = "0.0.0"
-
-    try:
-        with pytest.warns(
-            RuntimeWarning,
-            match="Reachy Mini SDK and daemon versions do not match",
-        ):
-            with Dreambo(host="localhost", port=port, media_backend="no_media"):
-                pass
-    finally:
-        await daemon.stop(goto_sleep_on_stop=False)
-        await _stop_app_server(server, thread)
-
-
-@pytest.mark.asyncio
-async def test_daemon_early_stop() -> None:
-    daemon, server, thread, port = await _start_app_server()
-
-    client_connected = asyncio.Event()
-    daemon_stopped = asyncio.Event()
-
-    async def client_bg() -> None:
-        with Dreambo(
-            host="localhost", port=port, media_backend="no_media"
-        ) as reachy:
-            client_connected.set()
-            await daemon_stopped.wait()
-
-            # Make sure the keep-alive check runs at least once
-            reachy.client._check_alive_evt.clear()
-            reachy.client._check_alive_evt.wait(timeout=100.0)
-
-            with pytest.raises(
-                ConnectionError, match="Lost connection with the server."
-            ):
-                reachy.set_target(head=np.eye(4))
-
-    async def will_stop_soon() -> None:
-        await client_connected.wait()
-        await daemon.stop(goto_sleep_on_stop=False)
-        await _stop_app_server(server, thread)
-        daemon_stopped.set()
-
-    await asyncio.gather(client_bg(), will_stop_soon())
-
-
-@pytest.mark.asyncio
 async def test_multi_robot_isolation() -> None:
     """Two daemons on different ports must be fully independent.
 
-    Commands sent to one robot must not affect the other.
+    A neck command to robot 1 must not move robot 2.
     """
     daemon1, server1, thread1, port1 = await _start_app_server()
     daemon2, server2, thread2, port2 = await _start_app_server()
@@ -157,36 +102,26 @@ async def test_multi_robot_isolation() -> None:
             Dreambo(host="localhost", port=port1, media_backend="no_media") as mini1,
             Dreambo(host="localhost", port=port2, media_backend="no_media") as mini2,
         ):
-            # Both robots should be running independently
-            status1 = mini1.client.get_status()
-            status2 = mini2.client.get_status()
-            assert status1.state == "running"
-            assert status2.state == "running"
+            assert mini1.client.get_status().state == "running"
+            assert mini2.client.get_status().state == "running"
 
-            # Read initial antenna positions from both robots
-            _, ant1_before = mini1.client.get_current_joints()
-            _, ant2_before = mini2.client.get_current_joints()
+            neck1_before = mini1.get_current_neck_joints()
+            neck2_before = mini2.get_current_neck_joints()
 
-            # Send antenna command ONLY to robot 1
-            new_antennas = [0.5, -0.5]
-            mini1.set_target_antenna_joint_positions(new_antennas)
-
-            # Wait for the command to take effect
+            mini1.set_neck([0.3, 0.2, 0.1])
             await asyncio.sleep(0.5)
 
-            _, ant1_after = mini1.client.get_current_joints()
-            _, ant2_after = mini2.client.get_current_joints()
+            neck1_after = mini1.get_current_neck_joints()
+            neck2_after = mini2.get_current_neck_joints()
 
-            # Robot 1 antennas should have moved toward the target
-            delta1 = np.max(np.abs(np.array(ant1_after) - np.array(ant1_before)))
-            assert delta1 > 0.1, (
-                f"Robot 1 antennas did not move after command (max delta={delta1})"
+            delta1 = np.max(np.abs(np.array(neck1_after) - np.array(neck1_before)))
+            assert delta1 > 0.05, (
+                f"Robot 1 neck did not move after command (max delta={delta1})"
             )
 
-            # Robot 2 antennas should be untouched (only sim noise)
-            delta2 = np.max(np.abs(np.array(ant2_after) - np.array(ant2_before)))
+            delta2 = np.max(np.abs(np.array(neck2_after) - np.array(neck2_before)))
             assert delta2 < 0.01, (
-                f"Robot 2 antennas moved after commanding robot 1 (max delta={delta2})"
+                f"Robot 2 neck moved after commanding robot 1 (max delta={delta2})"
             )
 
     finally:

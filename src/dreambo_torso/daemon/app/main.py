@@ -44,7 +44,6 @@ from dreambo_torso.media.audio_utils import (
     check_reachymini_asoundrc,
     write_asoundrc_to_home,
 )
-from dreambo_torso.motion.recorded_move import preload_default_datasets
 from dreambo_torso.utils.discovery import MdnsServiceRegistration
 from dreambo_torso.utils.wireless_version.startup_check import (
     check_and_fix_restore_venv,
@@ -71,14 +70,10 @@ class Args:
     scene: str = "empty"
     headless: bool = False
     no_media: bool = False
-    kinematics_engine: str = "AnalyticalKinematics"
-    check_collision: bool = False
     autostart: bool = True
     timeout_health_check: float | None = None
     wake_up_on_start: bool = True
     goto_sleep_on_stop: bool = True
-    preload_datasets: bool = False
-    dataset_update_interval_hours: float = 24.0  # 0 to disable periodic updates
     robot_name: str = "dreambo_torso"
     fastapi_host: str = "0.0.0.0"
     fastapi_port: int = 8000
@@ -97,46 +92,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         """Lifespan context manager for the FastAPI application."""
         args = app.state.args  # type: Args
-        dataset_updater_task: asyncio.Task[None] | None = None
         mdns = MdnsServiceRegistration(args.robot_name, args.fastapi_port)
-
-        def preload_with_logging() -> None:
-            """Download datasets with logging."""
-            try:
-                preload_default_datasets()
-                logger.info("Recorded move datasets pre-loaded successfully")
-            except Exception as e:
-                logger.warning(f"Failed to pre-load some datasets: {e}")
-
-        async def dataset_updater(interval_hours: float) -> None:
-            """Background task that periodically checks for dataset updates."""
-            interval_seconds = interval_hours * 3600
-            while True:
-                try:
-                    await asyncio.sleep(interval_seconds)
-                    logger.info("Checking for dataset updates...")
-                    loop = asyncio.get_event_loop()
-                    await loop.run_in_executor(None, preload_with_logging)
-                except asyncio.CancelledError:
-                    logger.info("Dataset updater task cancelled")
-                    break
-                except Exception as e:
-                    logger.warning(f"Error in dataset updater: {e}")
-
-        # Pre-download recorded move datasets in background to avoid delays on first play
-        # This runs in asyncio's default ThreadPoolExecutor (fire and forget)
-        if args.preload_datasets:
-            loop = asyncio.get_event_loop()
-            loop.run_in_executor(None, preload_with_logging)
-
-        # Start periodic dataset updater if enabled (interval > 0)
-        if args.dataset_update_interval_hours > 0:
-            dataset_updater_task = asyncio.create_task(
-                dataset_updater(args.dataset_update_interval_hours)
-            )
-            logger.info(
-                f"Dataset updater started (interval: {args.dataset_update_interval_hours}h)"
-            )
 
         try:
             if args.autostart:
@@ -147,8 +103,6 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                     scene=args.scene,
                     headless=args.headless,
                     use_audio=not args.no_media,
-                    kinematics_engine=args.kinematics_engine,
-                    check_collision=args.check_collision,
                     wake_up_on_start=args.wake_up_on_start,
                     localhost_only=localhost_only,
                     hardware_config_filepath=args.hardware_config_filepath,
@@ -159,14 +113,6 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
 
             yield
         finally:
-            # Cancel dataset updater task if running
-            if dataset_updater_task and not dataset_updater_task.done():
-                dataset_updater_task.cancel()
-                try:
-                    await dataset_updater_task
-                except asyncio.CancelledError:
-                    pass
-
             # Unregister mDNS service
             mdns.unregister()
 
@@ -537,25 +483,6 @@ def main() -> None:
         dest="goto_sleep_on_stop",
         help="Do not put the robot to sleep on daemon stop (default: False).",
     )
-    parser.add_argument(
-        "--preload-datasets",
-        action="store_true",
-        default=default_args.preload_datasets,
-        help="Pre-download recorded move datasets (emotions, dances) at startup (default: False).",
-    )
-    parser.add_argument(
-        "--no-preload-datasets",
-        action="store_false",
-        dest="preload_datasets",
-        help="Do not pre-download datasets at startup (default: False).",
-    )
-    parser.add_argument(
-        "--dataset-update-interval",
-        type=float,
-        default=default_args.dataset_update_interval_hours,
-        dest="dataset_update_interval_hours",
-        help="Interval in hours for background dataset update checks (default: 24.0, 0 to disable).",
-    )
     # Server options
     parser.add_argument(
         "--localhost-only",
@@ -568,21 +495,6 @@ def main() -> None:
         action="store_false",
         dest="localhost_only",
         help="Allow the server to listen on all interfaces (default: False).",
-    )
-    # Kinematics options
-    parser.add_argument(
-        "--check-collision",
-        action="store_true",
-        default=default_args.check_collision,
-        help="Enable collision checking (default: False).",
-    )
-
-    parser.add_argument(
-        "--kinematics-engine",
-        type=str,
-        default=default_args.kinematics_engine,
-        choices=["Placo", "NN", "AnalyticalKinematics"],
-        help="Set the kinematics engine (default: AnalyticalKinematics).",
     )
     # FastAPI server options
     parser.add_argument(

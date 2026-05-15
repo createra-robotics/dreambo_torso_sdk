@@ -1,4 +1,4 @@
-"""WebSocket client for Reachy Mini.
+"""WebSocket client for Dreambo torso.
 
 Connects to the daemon's /ws/sdk endpoint and provides cached state,
 fire-and-forget commands, and task request/progress tracking.
@@ -12,8 +12,6 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
-import numpy as np
-import numpy.typing as npt
 import requests
 import websockets.exceptions
 import websockets.sync.client as ws_sync
@@ -24,7 +22,6 @@ from dreambo_torso.io.protocol import (
     AnyCommand,
     AnyTaskRequest,
     DaemonStatus,
-    HeadPoseMsg,
     ImuDataMsg,
     JointPositionsMsg,
     RecordedDataMsg,
@@ -36,27 +33,27 @@ from dreambo_torso.io.protocol import (
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class TaskState:
+    """Tracking state for an in-flight task."""
+
+    event: threading.Event
+    error: str | None
+
+
 class WSClient(AbstractClient):
-    """WebSocket client for Reachy Mini."""
+    """WebSocket client for the Dreambo torso daemon."""
 
     def __init__(self, host: str = "localhost", port: int = 8000) -> None:
-        """Initialize the WebSocket client.
-
-        Args:
-            host: Hostname or IP of the daemon.
-            port: Port of the daemon's FastAPI server.
-
-        """
+        """Open a WebSocket to the daemon and start the receive thread."""
         self.host = host
         self.port = port
 
         self.joint_position_received = threading.Event()
-        self.head_pose_received = threading.Event()
         self.status_received = threading.Event()
         self.imu_data_received = threading.Event()
 
         self._last_joint_positions: JointPositionsMsg | None = None
-        self._last_head_pose: HeadPoseMsg | None = None
         self._last_imu_data: ImuDataMsg | None = None
         self._last_recorded_data: RecordedDataMsg | None = None
         self._recorded_data_ready = threading.Event()
@@ -77,49 +74,34 @@ class WSClient(AbstractClient):
         except (OSError, websockets.exceptions.InvalidHandshake, TimeoutError) as e:
             raise ConnectionError(f"Failed to connect to {uri}: {e}") from e
 
-        # Start receive loop in background thread
         self._recv_thread = threading.Thread(target=self._recv_loop, daemon=True)
         self._recv_thread.start()
 
     def wait_for_connection(self, timeout: float = 5.0) -> None:
-        """Wait for the client to receive initial data from the server.
-
-        Args:
-            timeout: Maximum time to wait for the connection in seconds.
-
-        Raises:
-            TimeoutError: If the connection is not established within the timeout.
-
-        """
+        """Block until the first JointPositionsMsg arrives, or raise on timeout."""
         start = time.time()
-        while not self.joint_position_received.wait(
-            timeout=1.0
-        ) or not self.head_pose_received.wait(timeout=1.0):
+        while not self.joint_position_received.wait(timeout=1.0):
             if time.time() - start > timeout:
                 self.disconnect()
-                raise TimeoutError(
-                    "Timeout while waiting for connection with the server."
-                )
+                raise TimeoutError("Timeout while waiting for connection with the server.")
             logger.info("Waiting for connection with the server...")
 
         self._is_alive = True
-        self._check_alive_evt = threading.Event()
         threading.Thread(target=self._check_alive, daemon=True).start()
 
     def _check_alive(self) -> None:
-        """Periodically check if the client is still connected."""
+        """Periodically refresh the connection-alive flag."""
         while not self._stop_event.is_set():
             self._is_alive = self.is_connected()
-            self._check_alive_evt.set()
             time.sleep(1.0)
 
     def is_connected(self) -> bool:
-        """Check if the client is still receiving data from the server."""
+        """True iff a server message was received within the last second."""
         self._heartbeat.clear()
         return self._heartbeat.wait(timeout=1.0)
 
     def disconnect(self) -> None:
-        """Disconnect the client from the server."""
+        """Stop the receive thread and close the WebSocket."""
         self._stop_event.set()
         if self._ws is not None:
             try:
@@ -129,18 +111,9 @@ class WSClient(AbstractClient):
             self._ws = None
 
     def send_command(self, cmd: AnyCommand) -> None:
-        """Send a typed command to the server.
-
-        Args:
-            cmd: A validated command model (one of the AnyCommand types).
-
-        Raises:
-            ConnectionError: If the connection with the server is lost.
-
-        """
+        """Send a typed command to the server."""
         if not self._is_alive:
             raise ConnectionError("Lost connection with the server.")
-
         if self._ws is not None:
             self._ws.send(cmd.model_dump_json())
 
@@ -149,7 +122,7 @@ class WSClient(AbstractClient):
     # ------------------------------------------------------------------
 
     def _recv_loop(self) -> None:
-        """Background thread: read messages from the WebSocket."""
+        """Background thread: dispatch server messages to handlers."""
         assert self._ws is not None
         try:
             for raw in self._ws:
@@ -167,13 +140,10 @@ class WSClient(AbstractClient):
             pass
 
     def _dispatch(self, msg: Any) -> None:
-        """Route an incoming message to the appropriate handler."""
+        """Route an incoming server message to the appropriate cache."""
         if isinstance(msg, JointPositionsMsg):
             self._last_joint_positions = msg
             self.joint_position_received.set()
-        elif isinstance(msg, HeadPoseMsg):
-            self._last_head_pose = msg
-            self.head_pose_received.set()
         elif isinstance(msg, ImuDataMsg):
             self._last_imu_data = msg
             self.imu_data_received.set()
@@ -196,23 +166,15 @@ class WSClient(AbstractClient):
     # Public query methods
     # ------------------------------------------------------------------
 
-    def get_current_joints(self) -> tuple[list[float], list[float]]:
-        """Get the current joint positions."""
+    def get_current_joints(self) -> JointPositionsMsg:
+        """Return the latest :class:`JointPositionsMsg` (one snapshot per subsystem)."""
         assert self._last_joint_positions is not None, (
             "No joint positions received yet. Wait for the client to connect."
         )
-        return (
-            self._last_joint_positions.head_joint_positions.copy(),
-            self._last_joint_positions.antennas_joint_positions.copy(),
-        )
-
-    def get_current_head_pose(self) -> npt.NDArray[np.float64]:
-        """Get the current head pose as a 4x4 matrix."""
-        assert self._last_head_pose is not None, "No head pose received yet."
-        return np.array(self._last_head_pose.head_pose)
+        return self._last_joint_positions
 
     def get_status(self, wait: bool = True, timeout: float = 5.0) -> DaemonStatus:
-        """Get the last received daemon status."""
+        """Return the latest daemon status, optionally blocking for a fresh one."""
         if wait and not self.status_received.wait(timeout):
             raise TimeoutError("Status not received in time.")
         self.status_received.clear()
@@ -220,26 +182,17 @@ class WSClient(AbstractClient):
         return self._last_status
 
     def get_current_imu_data(self) -> ImuDataMsg | None:
-        """Get the current IMU data.
-
-        Returns:
-            ImuDataMsg with accelerometer, gyroscope, quaternion, and temperature,
-            or None if no data has been received yet or IMU is not available.
-
-        """
+        """Return the latest cached IMU sample, or None if none has arrived."""
         return self._last_imu_data
 
     def wait_for_recorded_data(self, timeout: float = 5.0) -> bool:
-        """Block until the daemon publishes the frames (or timeout)."""
+        """Block until the daemon publishes a recording (or *timeout*)."""
         return self._recorded_data_ready.wait(timeout)
 
     def get_recorded_data(
         self, wait: bool = True, timeout: float = 5.0
     ) -> Optional[List[Dict[str, Any]]]:
-        """Return the cached recording, optionally blocking until it arrives.
-
-        Raises `TimeoutError` if nothing shows up in time.
-        """
+        """Return the cached recording, optionally blocking until it arrives."""
         if wait and not self._recorded_data_ready.wait(timeout):
             raise TimeoutError("Recording not received in time.")
         self._recorded_data_ready.clear()
@@ -252,7 +205,7 @@ class WSClient(AbstractClient):
     # ------------------------------------------------------------------
 
     def send_task_request(self, task_req: AnyTaskRequest) -> UUID:
-        """Send a task request to the server."""
+        """Send a task request to the server and return its UUID."""
         if not self._is_alive:
             raise ConnectionError("Lost connection with the server.")
 
@@ -262,11 +215,10 @@ class WSClient(AbstractClient):
 
         assert self._ws is not None
         self._ws.send(task.model_dump_json())
-
         return task.uuid
 
     def wait_for_task_completion(self, task_uid: UUID, timeout: float = 5.0) -> None:
-        """Wait for the specified task to complete."""
+        """Block until the named task finishes or *timeout* elapses."""
         with self._tasks_lock:
             task = self.tasks.get(task_uid)
         if task is None:
@@ -285,30 +237,15 @@ class WSClient(AbstractClient):
             del self.tasks[task_uid]
 
     def release_media(self) -> bool:
-        """Ask the daemon to release camera/audio hardware.
-
-        Returns:
-            True on success, False on failure.
-
-        """
+        """Ask the daemon to release camera/audio hardware."""
         return self._media_request("/api/media/release")
 
     def acquire_media(self) -> bool:
-        """Ask the daemon to re-acquire camera/audio hardware.
-
-        Returns:
-            True on success, False on failure.
-
-        """
+        """Ask the daemon to re-acquire camera/audio hardware."""
         return self._media_request("/api/media/acquire")
 
     def _media_request(self, path: str) -> bool:
-        """POST to a daemon media endpoint.
-
-        Returns:
-            True on success, False on failure.
-
-        """
+        """POST to a daemon media endpoint; True on success."""
         url = f"http://{self.host}:{self.port}{path}"
         try:
             resp = requests.post(url, timeout=10)
@@ -317,11 +254,3 @@ class WSClient(AbstractClient):
         except requests.RequestException as e:
             logging.warning("Media request %s failed: %s", path, e)
             return False
-
-
-@dataclass
-class TaskState:
-    """Represents the state of a task."""
-
-    event: threading.Event
-    error: str | None

@@ -1,11 +1,15 @@
-"""Base class for robot backends, simulated or real.
+"""Base class for Dreambo torso backends (simulated or real).
 
-This module defines the `Backend` class, which serves as a base for implementing
-different types of robot backends, whether they are simulated (like Mujoco) or real
-(connected via serial port). The class provides methods for managing joint positions,
-torque control, and other backend-specific functionalities.
-It is designed to be extended by subclasses that implement the specific behavior for
-each type of backend.
+The new torso has four subsystems, each commanded in joint space:
+
+- ``neck``      (3 DOF): yaw, pitch, roll. DM motors over CAN.
+- ``left_arm``  (2 DOF): theta_a, theta_b. Spherical 5-bar shoulder.
+- ``right_arm`` (2 DOF): theta_a, theta_b. Spherical 5-bar shoulder.
+- ``nose``      (3 DOF): top, left, right.
+
+The :class:`Backend` here owns target/present state per subsystem and
+implements transport-agnostic command dispatch (WebSocket / WebRTC).
+Subclasses implement the actual control loop and motor I/O.
 """
 
 import asyncio
@@ -13,18 +17,19 @@ import json
 import logging
 import threading
 import time
-import typing
 from abc import abstractmethod
+from importlib.resources import files
 from pathlib import Path
-from typing import Annotated, Any, Callable, Dict, Optional
+from typing import Annotated, Any, Callable, Optional
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.spatial.transform import Rotation as R
 
+import dreambo_torso
 from dreambo_torso.io.protocol import (
     AnyCommand,
     AppendRecordCmd,
+    ArmSide,
     GetMicrophoneVolumeCmd,
     GetMotorModeCmd,
     GetStateCmd,
@@ -38,15 +43,12 @@ from dreambo_torso.io.protocol import (
     PlaySoundCmd,
     RecordedDataMsg,
     RobotBackendStatus,
-    SetAntennasCmd,
-    SetAutomaticBodyYawCmd,
-    SetBodyYawCmd,
+    SetArmCmd,
     SetFullTargetCmd,
-    SetGravityCompensationCmd,
-    SetHeadJointsCmd,
     SetMicrophoneVolumeCmd,
     SetMotorModeCmd,
-    SetTargetCmd,
+    SetNeckCmd,
+    SetNoseCmd,
     SetTorqueCmd,
     SetVolumeCmd,
     StartRecordingCmd,
@@ -55,33 +57,34 @@ from dreambo_torso.io.protocol import (
     command_adapter,
 )
 from dreambo_torso.io.publisher import Publisher
-
-if typing.TYPE_CHECKING:
-    from dreambo_torso.kinematics import AnyKinematics
-# MediaManager no longer used here — play_sound delegated to GstMediaServer
 from dreambo_torso.media.audio_doa import AudioDoA
 from dreambo_torso.motion.goto import GotoMove
-from dreambo_torso.motion.move import Move
-from dreambo_torso.utils.constants import MODELS_ROOT_PATH, URDF_ROOT_PATH
-from dreambo_torso.utils.interpolation import (
-    InterpolationTechnique,
-    distance_between_poses,
-    time_trajectory,
-)
+from dreambo_torso.motion.move import JointTargets, Move
+from dreambo_torso.motion.named_poses import NamedPose, NamedPoses
+from dreambo_torso.utils.constants import URDF_ROOT_PATH
+from dreambo_torso.utils.interpolation import InterpolationTechnique
+
+# Joint counts per subsystem.
+NECK_DOF = 3
+ARM_DOF = 2
+NOSE_DOF = 3
+
+
+def _named_poses_path() -> Path:
+    """Locate the bundled named_poses.yaml file."""
+    return Path(str(files(dreambo_torso).joinpath("assets/config/named_poses.yaml")))
 
 
 class Backend:
-    """Base class for robot backends, simulated or real."""
+    """Base class for Dreambo torso backends, simulated or real."""
 
     def __init__(
         self,
         log_level: str = "INFO",
-        check_collision: bool = False,
-        kinematics_engine: str = "AnalyticalKinematics",
         use_audio: bool = True,
         wireless_version: bool = False,
     ) -> None:
-        """Initialize the backend."""
+        """Initialize the backend's state and concurrency primitives."""
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
         self.use_audio = use_audio
@@ -89,158 +92,98 @@ class Backend:
         self.should_stop = threading.Event()
         self.ready = threading.Event()
 
-        self.check_collision = (
-            check_collision  # Flag to enable/disable collision checking
-        )
+        # Present (sensed) joint positions per subsystem. Filled by the
+        # subclass control loop on every tick.
+        self.current_neck_joint_positions: (
+            Annotated[NDArray[np.float64], (NECK_DOF,)] | None
+        ) = None
+        self.current_left_arm_joint_positions: (
+            Annotated[NDArray[np.float64], (ARM_DOF,)] | None
+        ) = None
+        self.current_right_arm_joint_positions: (
+            Annotated[NDArray[np.float64], (ARM_DOF,)] | None
+        ) = None
+        self.current_nose_joint_positions: (
+            Annotated[NDArray[np.float64], (NOSE_DOF,)] | None
+        ) = None
 
-        self.kinematics_engine = kinematics_engine
-        self.logger.info(f"Using {self.kinematics_engine} kinematics engine")
-
-        if self.check_collision:
-            assert self.kinematics_engine == "Placo", (
-                "Collision checking is only available with Placo Kinematics"
-            )
-
-        self.gravity_compensation_mode = False  # Flag for gravity compensation mode
-
-        if self.gravity_compensation_mode:
-            assert self.kinematics_engine == "Placo", (
-                "Gravity compensation is only available with Placo kinematics"
-            )
-
-        if self.kinematics_engine == "Placo":
-            from dreambo_torso.kinematics import PlacoKinematics
-            self.head_kinematics: AnyKinematics = PlacoKinematics(
-                URDF_ROOT_PATH, check_collision=self.check_collision
-            )
-        elif self.kinematics_engine == "NN":
-            from dreambo_torso.kinematics import NNKinematics
-            self.head_kinematics = NNKinematics(MODELS_ROOT_PATH)
-        elif self.kinematics_engine == "AnalyticalKinematics":
-            from dreambo_torso.kinematics import AnalyticalKinematics
-            self.head_kinematics = AnalyticalKinematics()
-        else:
-            raise ValueError(
-                f"Unknown kinematics engine: {self.kinematics_engine}. Use 'Placo', 'NN' or 'AnalyticalKinematics'."
-            )
-
-        self.current_head_pose: Annotated[NDArray[np.float64], (4, 4)] | None = (
-            None  # 4x4 pose matrix
-        )
-        self.target_head_pose: Annotated[NDArray[np.float64], (4, 4)] | None = (
-            None  # 4x4 pose matrix
-        )
-        self.target_body_yaw: float | None = (
-            None  # Last body yaw used in IK computations
-        )
-
-        self.target_head_joint_positions: (
-            Annotated[NDArray[np.float64], (7,)] | None
-        ) = None  # [yaw, 0, 1, 2, 3, 4, 5]
-        self.current_head_joint_positions: (
-            Annotated[NDArray[np.float64], (7,)] | None
-        ) = None  # [yaw, 0, 1, 2, 3, 4, 5]
-        self.target_antenna_joint_positions: (
-            Annotated[NDArray[np.float64], (2,)] | None
-        ) = None  # [0, 1]
-        self.current_antenna_joint_positions: (
-            Annotated[NDArray[np.float64], (2,)] | None
-        ) = None  # [0, 1]
+        # Target joint positions per subsystem. ``None`` means "leave alone".
+        self.target_neck_joint_positions: (
+            Annotated[NDArray[np.float64], (NECK_DOF,)] | None
+        ) = None
+        self.target_left_arm_joint_positions: (
+            Annotated[NDArray[np.float64], (ARM_DOF,)] | None
+        ) = None
+        self.target_right_arm_joint_positions: (
+            Annotated[NDArray[np.float64], (ARM_DOF,)] | None
+        ) = None
+        self.target_nose_joint_positions: (
+            Annotated[NDArray[np.float64], (NOSE_DOF,)] | None
+        ) = None
 
         self.joint_positions_publisher: Publisher | None = None
-        self.pose_publisher: Publisher | None = None
         self.recording_publisher: Publisher | None = None
         self.imu_publisher: Publisher | None = None
-        self.error: str | None = None  # To store any error that occurs during execution
-        self.is_recording = False  # Flag to indicate if recording is active
-        self.recorded_data: list[dict[str, Any]] = []  # List to store recorded data
-
-        # variables to store the last computed head joint positions and pose
-        self._last_target_body_yaw: float | None = (
-            None  # Last body yaw used in IK computations
-        )
-        self._last_target_head_pose: Annotated[NDArray[np.float64], (4, 4)] | None = (
-            None  # Last head pose used in IK computations
-        )
-        self.target_head_joint_current: Annotated[NDArray[np.float64], (7,)] | None = (
-            None  # Placeholder for head joint torque
-        )
-        self.ik_required = False  # Flag to indicate if IK computation is required
+        self.error: str | None = None
+        self.is_recording = False
+        self.recorded_data: list[dict[str, Any]] = []
 
         self.is_shutting_down = False
 
-        # Tolerance for kinematics computations
-        # For Forward kinematics (around 0.25deg)
-        # - FK is calculated at each timestep and is susceptible to noise
-        self._fk_kin_tolerance = 1e-3  # rads
-        # For Inverse kinematics (around 0.5mm and 0.1 degrees)
-        # - IK is calculated only when the head pose is set by the user
-        self._ik_kin_tolerance = {
-            "rad": 2e-3,  # rads
-            "m": 0.5e-3,  # m
-        }
-
-        # Recording lock to guard buffer swaps and appends
+        # Recording lock to guard buffer swaps and appends.
         self._rec_lock = threading.Lock()
 
         # Reference to the media server for play_sound delegation.
-        # Set via setup_media_server().
         self._media_server: Optional[Any] = None
 
-        # Guard to ensure only one play_move/goto is executed at a time (goto itself uses play_move, so we need an RLock)
+        # Guard so a play_move and a goto don't trample each other.
         self._play_move_lock = threading.RLock()
-        self._active_move_depth = (
-            0  # Tracks nested acquisitions within the owning thread
-        )
+        self._active_move_depth = 0
 
         # WebRTC support
-        self._send_message_to_webrtc: Optional[Callable[[Optional[str], str], None]] = (
-            None
-        )
+        self._send_message_to_webrtc: Optional[
+            Callable[[Optional[str], str], None]
+        ] = None
 
-    # Life cycle methods
+        # Named poses (init / wake / sleep / ...). Loaded lazily on first use.
+        self._named_poses: NamedPoses | None = None
+
+    # ------------------------------------------------------------------
+    # Life cycle
+    # ------------------------------------------------------------------
+
     def wrapped_run(self) -> None:
-        """Run the backend in a try-except block to store errors."""
+        """Run :meth:`run` in a try/except, storing any error before re-raising."""
         try:
             self.run()
         except Exception as e:
             self.error = str(e)
             self.close()
-            raise e
+            raise
 
     def run(self) -> None:
-        """Run the backend.
-
-        This method is a placeholder and should be overridden by subclasses.
-        """
-        raise NotImplementedError("The method run should be overridden by subclasses.")
+        """Run the backend control loop. Subclasses override this."""
+        raise NotImplementedError("Backend.run() must be overridden by subclasses.")
 
     def close(self) -> None:
-        """Close the backend and release resources.
-
-        Subclasses should override this method to add their own cleanup logic,
-        and call super().close() at the end.
-
-        Note: This base implementation handles common cleanup.
-        Subclasses must still implement their own cleanup for backend-specific resources.
-        """
+        """Release shared resources. Subclasses extend with their own cleanup."""
         self.logger.debug("Backend.close() - cleaning up resources")
         self._media_server = None
 
     @property
     def is_move_running(self) -> bool:
-        """Return True if a move is currently executing."""
+        """Whether a play_move / goto is currently executing."""
         return self._active_move_depth > 0
 
     def _try_start_move(self) -> bool:
-        """Attempt to acquire the move guard, returning False if another client already owns it."""
+        """Attempt to grab the move guard non-blockingly; True iff acquired."""
         if not self._play_move_lock.acquire(blocking=False):
             return False
         self._active_move_depth += 1
         return True
 
     def _end_move(self) -> None:
-        """Release the move guard; paired with every successful _try_start_move()."""
+        """Release the move guard. Pair with every successful :meth:`_try_start_move`."""
         if self._active_move_depth > 0:
             self._active_move_depth -= 1
         self._play_move_lock.release()
@@ -248,153 +191,112 @@ class Backend:
     def get_status(
         self,
     ) -> "RobotBackendStatus | MujocoBackendStatus | MockupSimBackendStatus":
-        """Return backend statistics.
+        """Return backend status. Subclasses override this."""
+        raise NotImplementedError("Backend.get_status() must be overridden by subclasses.")
 
-        This method is a placeholder and should be overridden by subclasses.
-        """
-        raise NotImplementedError(
-            "The method get_status should be overridden by subclasses."
-        )
+    # ------------------------------------------------------------------
+    # Publishers
+    # ------------------------------------------------------------------
 
-    # Present/Target joint positions
     def set_joint_positions_publisher(self, publisher: Publisher) -> None:
-        """Set the publisher for joint positions.
-
-        Args:
-            publisher: A publisher object that will be used to publish joint positions.
-
-        """
+        """Wire the publisher that emits :class:`JointPositionsMsg` at 50 Hz."""
         self.joint_positions_publisher = publisher
 
-    def set_pose_publisher(self, publisher: Publisher) -> None:
-        """Set the publisher for head pose.
-
-        Args:
-            publisher: A publisher object that will be used to publish head pose.
-
-        """
-        self.pose_publisher = publisher
-
     def set_imu_publisher(self, publisher: Publisher) -> None:
-        """Set the publisher for IMU data.
-
-        Args:
-            publisher: A publisher object that will be used to publish IMU data.
-
-        """
+        """Wire the publisher that emits :class:`ImuDataMsg` at 50 Hz."""
         self.imu_publisher = publisher
 
-    def update_target_head_joints_from_ik(
-        self,
-        pose: Annotated[NDArray[np.float64], (4, 4)] | None = None,
-        body_yaw: float | None = None,
+    def set_recording_publisher(self, publisher: Publisher) -> None:
+        """Wire the publisher that emits :class:`RecordedDataMsg` on stop_recording."""
+        self.recording_publisher = publisher
+
+    # ------------------------------------------------------------------
+    # Per-subsystem target setters
+    # ------------------------------------------------------------------
+
+    def set_target_neck_joint_positions(
+        self, positions: Annotated[NDArray[np.float64], (NECK_DOF,)]
     ) -> None:
-        """Update the target head joint positions from inverse kinematics.
+        """Set the target neck joint positions [yaw, pitch, roll]."""
+        self.target_neck_joint_positions = np.asarray(positions, dtype=np.float64)
 
-        Args:
-            pose (np.ndarray): 4x4 pose matrix representing the head pose.
-            body_yaw (float): The yaw angle of the body, used to adjust the head pose.
-
-        """
-        if pose is None:
-            pose = (
-                self.target_head_pose
-                if self.target_head_pose is not None
-                else np.eye(4)
-            )
-
-        if body_yaw is None:
-            body_yaw = self.target_body_yaw if self.target_body_yaw is not None else 0.0
-
-        # Compute the inverse kinematics to get the head joint positions
-        joints = self.head_kinematics.ik(pose, body_yaw=body_yaw)
-        if joints is None or np.any(np.isnan(joints)):
-            raise ValueError("WARNING: Collision detected or head pose not achievable!")
-
-        # update the target head pose and body yaw
-        self._last_target_head_pose = pose
-        self._last_target_body_yaw = body_yaw
-
-        self.target_head_joint_positions = joints
-
-    def set_target_head_pose(
-        self,
-        pose: Annotated[NDArray[np.float64], (4, 4)],
+    def set_target_left_arm_joint_positions(
+        self, positions: Annotated[NDArray[np.float64], (ARM_DOF,)]
     ) -> None:
-        """Set the target head pose for the robot.
+        """Set the target left-arm joint positions [theta_a, theta_b]."""
+        self.target_left_arm_joint_positions = np.asarray(positions, dtype=np.float64)
 
-        Args:
-            pose (np.ndarray): 4x4 pose matrix representing the head pose.
-
-        """
-        self.target_head_pose = pose
-        self.ik_required = True
-
-    def set_target_body_yaw(self, body_yaw: float) -> None:
-        """Set the target body yaw for the robot.
-
-        Only used when doing a set_target() with a standalone body_yaw (no head pose).
-
-        Args:
-            body_yaw (float): The yaw angle of the body
-
-        """
-        self.target_body_yaw = body_yaw
-        self.ik_required = True  # Do we need that here?
-
-    def set_target_head_joint_positions(
-        self, positions: Annotated[NDArray[np.float64], (7,)] | None
+    def set_target_right_arm_joint_positions(
+        self, positions: Annotated[NDArray[np.float64], (ARM_DOF,)]
     ) -> None:
-        """Set the head joint positions.
+        """Set the target right-arm joint positions [theta_a, theta_b]."""
+        self.target_right_arm_joint_positions = np.asarray(positions, dtype=np.float64)
 
-        Args:
-            positions (List[float]): A list of joint positions for the head.
-
-        """
-        self.target_head_joint_positions = positions
-        self.ik_required = False
+    def set_target_nose_joint_positions(
+        self, positions: Annotated[NDArray[np.float64], (NOSE_DOF,)]
+    ) -> None:
+        """Set the target nose joint positions [top, left, right]."""
+        self.target_nose_joint_positions = np.asarray(positions, dtype=np.float64)
 
     def set_target(
         self,
-        head: Annotated[NDArray[np.float64], (4, 4)] | None = None,  # 4x4 pose matrix
-        antennas: Annotated[NDArray[np.float64], (2,)]
-        | None = None,  # [right_angle, left_angle] (in rads)
-        body_yaw: float | None = None,  # Body yaw angle in radians
+        neck: NDArray[np.float64] | None = None,
+        left_arm: NDArray[np.float64] | None = None,
+        right_arm: NDArray[np.float64] | None = None,
+        nose: NDArray[np.float64] | None = None,
     ) -> None:
-        """Set the target head pose and/or antenna positions and/or body_yaw."""
-        if head is not None:
-            self.set_target_head_pose(head)
+        """Apply any subset of subsystem targets in one call."""
+        if neck is not None:
+            self.set_target_neck_joint_positions(neck)
+        if left_arm is not None:
+            self.set_target_left_arm_joint_positions(left_arm)
+        if right_arm is not None:
+            self.set_target_right_arm_joint_positions(right_arm)
+        if nose is not None:
+            self.set_target_nose_joint_positions(nose)
 
-        if body_yaw is not None:
-            self.set_target_body_yaw(body_yaw)
+    def _apply_joint_targets(self, targets: JointTargets) -> None:
+        """Apply a :class:`JointTargets` (e.g. from a Move) to the target state."""
+        if targets.neck is not None:
+            self.set_target_neck_joint_positions(targets.neck)
+        if targets.left_arm is not None:
+            self.set_target_left_arm_joint_positions(targets.left_arm)
+        if targets.right_arm is not None:
+            self.set_target_right_arm_joint_positions(targets.right_arm)
+        if targets.nose is not None:
+            self.set_target_nose_joint_positions(targets.nose)
 
-        if antennas is not None:
-            self.set_target_antenna_joint_positions(antennas)
+    # ------------------------------------------------------------------
+    # Per-subsystem reads (abstract; subclasses fill in)
+    # ------------------------------------------------------------------
 
-    def set_target_antenna_joint_positions(
+    @abstractmethod
+    def get_present_neck_joint_positions(
         self,
-        positions: Annotated[NDArray[np.float64], (2,)],
-    ) -> None:
-        """Set the antenna joint positions.
+    ) -> Annotated[NDArray[np.float64], (NECK_DOF,)]:
+        """Return the current neck joint positions."""
 
-        Args:
-            positions (List[float]): A list of joint positions for the antenna.
-
-        """
-        self.target_antenna_joint_positions = positions
-
-    def set_target_head_joint_current(
+    @abstractmethod
+    def get_present_left_arm_joint_positions(
         self,
-        current: Annotated[NDArray[np.float64], (7,)],
-    ) -> None:
-        """Set the head joint current.
+    ) -> Annotated[NDArray[np.float64], (ARM_DOF,)]:
+        """Return the current left-arm joint positions."""
 
-        Args:
-            current (Annotated[NDArray[np.float64], (7,)]): A list of current values for the head motors.
+    @abstractmethod
+    def get_present_right_arm_joint_positions(
+        self,
+    ) -> Annotated[NDArray[np.float64], (ARM_DOF,)]:
+        """Return the current right-arm joint positions."""
 
-        """
-        self.target_head_joint_current = current
-        self.ik_required = False
+    @abstractmethod
+    def get_present_nose_joint_positions(
+        self,
+    ) -> Annotated[NDArray[np.float64], (NOSE_DOF,)]:
+        """Return the current nose joint positions."""
+
+    # ------------------------------------------------------------------
+    # Move playback
+    # ------------------------------------------------------------------
 
     async def play_move(
         self,
@@ -402,12 +304,14 @@ class Backend:
         play_frequency: float = 100.0,
         initial_goto_duration: float = 0.0,
     ) -> None:
-        """Asynchronously play a Move.
+        """Asynchronously play a :class:`Move`.
 
         Args:
-            move (Move): The Move object to be played.
-            play_frequency (float): The frequency at which to evaluate the move (in Hz).
-            initial_goto_duration (float): Duration for an initial goto to the move's starting position. If 0.0, no initial goto is performed.
+            move: The :class:`Move` to play. Its :meth:`Move.evaluate`
+                must return a :class:`JointTargets`.
+            play_frequency: Evaluation frequency in Hz.
+            initial_goto_duration: If > 0, first interpolate to the move's
+                initial pose over this many seconds.
 
         """
         if not self._try_start_move():
@@ -416,15 +320,15 @@ class Backend:
 
         try:
             if initial_goto_duration > 0.0:
-                start_head_pose, start_antennas_positions, start_body_yaw = (
-                    move.evaluate(0.0)
-                )
+                start_targets = move.evaluate(0.0)
                 await self.goto_target(
-                    head=start_head_pose,
-                    antennas=start_antennas_positions,
+                    neck=start_targets.neck,
+                    left_arm=start_targets.left_arm,
+                    right_arm=start_targets.right_arm,
+                    nose=start_targets.nose,
                     duration=initial_goto_duration,
-                    body_yaw=start_body_yaw,
                 )
+
             sleep_period = 1.0 / play_frequency
 
             if move.sound_path is not None:
@@ -433,14 +337,7 @@ class Backend:
             t0 = time.time()
             while time.time() - t0 < move.duration:
                 t = time.time() - t0
-
-                head, antennas, body_yaw = move.evaluate(t)
-                if head is not None:
-                    self.set_target_head_pose(head)
-                if body_yaw is not None:
-                    self.set_target_body_yaw(body_yaw)
-                if antennas is not None:
-                    self.set_target_antenna_joint_positions(antennas)
+                self._apply_joint_targets(move.evaluate(t))
 
                 elapsed = time.time() - t0 - t
                 if elapsed < sleep_period:
@@ -452,132 +349,57 @@ class Backend:
 
     async def goto_target(
         self,
-        head: Annotated[NDArray[np.float64], (4, 4)] | None = None,  # 4x4 pose matrix
-        antennas: Annotated[NDArray[np.float64], (2,)]
-        | None = None,  # [right_angle, left_angle] (in rads)
-        duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
-        method: InterpolationTechnique = InterpolationTechnique.MIN_JERK,  # can be "linear", "minjerk", "ease_in_out" or "cartoon", default is "minjerk"
-        body_yaw: float | None = 0.0,  # Body yaw angle in radians
+        neck: NDArray[np.float64] | None = None,
+        left_arm: NDArray[np.float64] | None = None,
+        right_arm: NDArray[np.float64] | None = None,
+        nose: NDArray[np.float64] | None = None,
+        duration: float = 0.5,
+        method: InterpolationTechnique = InterpolationTechnique.MIN_JERK,
     ) -> None:
-        """Asynchronously go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
+        """Smoothly interpolate any subset of subsystems to the given targets."""
+        target_neck = np.asarray(neck, dtype=np.float64) if neck is not None else None
+        target_left = np.asarray(left_arm, dtype=np.float64) if left_arm is not None else None
+        target_right = np.asarray(right_arm, dtype=np.float64) if right_arm is not None else None
+        target_nose = np.asarray(nose, dtype=np.float64) if nose is not None else None
 
-        Args:
-            head (np.ndarray | None): 4x4 pose matrix representing the target head pose.
-            antennas (np.ndarray | list[float] | None): 1D array with two elements representing the angles of the antennas in radians.
-            duration (float): Duration of the movement in seconds.
-            method (str): Interpolation method to use ("linear", "minjerk", "ease_in_out", "cartoon"). Default is "minjerk".
-            body_yaw (float | None): Body yaw angle in radians.
-
-        Raises:
-            ValueError: If neither head nor antennas are provided, or if duration is not positive.
-
-        """
-        return await self.play_move(
+        await self.play_move(
             move=GotoMove(
-                start_head_pose=self.get_present_head_pose(),
-                target_head_pose=head,
-                start_body_yaw=self.get_present_body_yaw(),
-                target_body_yaw=body_yaw,
-                start_antennas=np.array(self.get_present_antenna_joint_positions()),
-                target_antennas=np.array(antennas) if antennas is not None else None,
+                start_neck=self.get_present_neck_joint_positions(),
+                target_neck=target_neck,
+                start_left_arm=self.get_present_left_arm_joint_positions(),
+                target_left_arm=target_left,
+                start_right_arm=self.get_present_right_arm_joint_positions(),
+                target_right_arm=target_right,
+                start_nose=self.get_present_nose_joint_positions(),
+                target_nose=target_nose,
                 duration=duration,
                 method=method,
             )
         )
 
-    async def goto_joint_positions(
-        self,
-        head_joint_positions: list[float]
-        | None = None,  # [yaw, stewart_platform x 6] length 7
-        antennas_joint_positions: list[float]
-        | None = None,  # [right_angle, left_angle] length 2
-        duration: float = 0.5,  # Duration in seconds for the movement
-        method: InterpolationTechnique = InterpolationTechnique.MIN_JERK,  # can be "linear", "minjerk", "ease_in_out" or "cartoon", default is "minjerk"
-    ) -> None:
-        """Asynchronously go to a target head joint positions and/or antennas joint positions using joint space interpolation, in "duration" seconds.
-
-        Go to a target head joint positions and/or antennas joint positions using joint space interpolation, in "duration" seconds.
-
-        Args:
-            head_joint_positions (Optional[List[float]]): List of head joint positions in radians (length 7).
-            antennas_joint_positions (Optional[List[float]]): List of antennas joint positions in radians (length 2).
-            duration (float): Duration of the movement in seconds. Default is 0.5 seconds.
-            method (str): Interpolation method to use ("linear", "minjerk", "ease_in_out", "cartoon"). Default is "minjerk".
-
-        Raises:
-            ValueError: If neither head_joint_positions nor antennas_joint_positions are provided, or if duration is not positive.
-
-        """
-        if duration <= 0.0:
-            raise ValueError(
-                "Duration must be positive and non-zero. Use set_target() for immediate position setting."
-            )
-
-        start_head = np.array(self.get_present_head_joint_positions())
-        start_antennas = np.array(self.get_present_antenna_joint_positions())
-
-        target_head = (
-            np.array(head_joint_positions)
-            if head_joint_positions is not None
-            else start_head
-        )
-        target_antennas = (
-            np.array(antennas_joint_positions)
-            if antennas_joint_positions is not None
-            else start_antennas
-        )
-
-        t0 = time.time()
-        while time.time() - t0 < duration:
-            t = time.time() - t0
-
-            interp_time = time_trajectory(t / duration, method=method)
-
-            head_joint = start_head + (target_head - start_head) * interp_time
-            antennas_joint = (
-                start_antennas + (target_antennas - start_antennas) * interp_time
-            )
-
-            self.set_target_head_joint_positions(head_joint)
-            self.set_target_antenna_joint_positions(antennas_joint)
-            await asyncio.sleep(0.01)
-
-    def set_recording_publisher(self, publisher: Publisher) -> None:
-        """Set the publisher for recording data.
-
-        Args:
-            publisher: A publisher object that will be used to publish recorded data.
-
-        """
-        self.recording_publisher = publisher
+    # ------------------------------------------------------------------
+    # Recording
+    # ------------------------------------------------------------------
 
     def append_record(self, record: dict[str, Any]) -> None:
-        """Append a record to the recorded data.
-
-        Args:
-            record (dict): A dictionary containing the record data to be appended.
-
-        """
+        """Append a record to the active recording buffer (no-op when idle)."""
         if not self.is_recording:
             return
-        # Double-check under lock to avoid race with stop_recording
         with self._rec_lock:
             if self.is_recording:
                 self.recorded_data.append(record)
 
     def start_recording(self) -> None:
-        """Start recording data."""
+        """Begin a new recording, discarding any previous buffer."""
         with self._rec_lock:
             self.recorded_data = []
             self.is_recording = True
 
     def stop_recording(self) -> None:
-        """Stop recording data and publish the recorded data."""
-        # Swap buffer under lock so writers cannot touch the published list
+        """End recording and publish the buffered data."""
         with self._rec_lock:
             self.is_recording = False
             recorded_data, self.recorded_data = self.recorded_data, []
-        # Publish outside the lock
         if self.recording_publisher is not None:
             self.recording_publisher.put(RecordedDataMsg(data=recorded_data))
         else:
@@ -585,282 +407,88 @@ class Backend:
                 "stop_recording called but recording_publisher is not set; dropping data."
             )
 
-    def get_present_head_joint_positions(self) -> Annotated[NDArray[np.float64], (7,)]:
-        """Return the present head joint positions.
+    # ------------------------------------------------------------------
+    # Named poses (init / wake / sleep / ...)
+    # ------------------------------------------------------------------
 
-        This method is a placeholder and should be overridden by subclasses.
-        """
-        raise NotImplementedError(
-            "The method get_present_head_joint_positions should be overridden by subclasses."
+    def _load_named_poses(self) -> NamedPoses:
+        """Load and cache the bundled named_poses.yaml."""
+        if self._named_poses is None:
+            self._named_poses = NamedPoses.load(_named_poses_path())
+        return self._named_poses
+
+    async def _goto_named_pose(self, name: str, duration: float) -> None:
+        """Interpolate every subsystem of the named pose to its target."""
+        pose: NamedPose = self._load_named_poses()[name]
+        await self.goto_target(
+            neck=pose.neck,
+            left_arm=pose.left_arm,
+            right_arm=pose.right_arm,
+            nose=pose.nose,
+            duration=duration,
         )
 
-    def get_present_body_yaw(self) -> float:
-        """Return the present body yaw."""
-        yaw: float = self.get_present_head_joint_positions()[0]
-        return yaw
+    async def wake_up(self) -> None:
+        """Run the 'wake' named pose with the wake_up.wav cue."""
+        await self._goto_named_pose("wake", duration=1.5)
+        await asyncio.sleep(0.1)
+        self.play_sound("wake_up.wav")
+        await asyncio.sleep(0.5)
 
-    def get_present_head_pose(self) -> Annotated[NDArray[np.float64], (4, 4)]:
-        """Return the present head pose as a 4x4 matrix."""
-        assert self.current_head_pose is not None, (
-            "The current head pose is not set. Please call the update_head_kinematics_model method first."
-        )
-        return self.current_head_pose
+    async def goto_sleep(self) -> None:
+        """Run the 'sleep' named pose with the go_sleep.wav cue."""
+        self.play_sound("go_sleep.wav")
+        await self._goto_named_pose("sleep", duration=2.0)
+        await asyncio.sleep(1.0)
 
-    def get_current_head_pose(self) -> Annotated[NDArray[np.float64], (4, 4)]:
-        """Return the present head pose as a 4x4 matrix."""
-        return self.get_present_head_pose()
-
-    def get_present_antenna_joint_positions(
-        self,
-    ) -> Annotated[NDArray[np.float64], (2,)]:
-        """Return the present antenna joint positions.
-
-        This method is a placeholder and should be overridden by subclasses.
-        """
-        raise NotImplementedError(
-            "The method get_present_antenna_joint_positions should be overridden by subclasses."
-        )
-
-    # Kinematics methods
-    def update_head_kinematics_model(
-        self,
-        head_joint_positions: Annotated[NDArray[np.float64], (7,)] | None = None,
-        antennas_joint_positions: Annotated[NDArray[np.float64], (2,)] | None = None,
-    ) -> None:
-        """Update the placo kinematics of the robot.
-
-        Args:
-            head_joint_positions (List[float] | None): The joint positions of the head.
-            antennas_joint_positions (List[float] | None): The joint positions of the antennas.
-
-        Returns:
-            None: This method does not return anything.
-
-        This method updates the head kinematics model with the given joint positions.
-        - If the joint positions are not provided, it will use the current joint positions.
-        - If the head joint positions have not changed, it will return without recomputing the forward kinematics.
-        - If the head joint positions have changed, it will compute the forward kinematics to get the current head pose.
-        - If the forward kinematics fails, it will raise an assertion error.
-        - If the antennas joint positions are provided, it will update the current antenna joint positions.
-
-        Note:
-            This method will update the `current_head_pose` and `current_head_joint_positions`
-            attributes of the backend instance with the computed values. And the `current_antenna_joint_positions` if provided.
-
-        """
-        if head_joint_positions is None:
-            head_joint_positions = self.get_present_head_joint_positions()
-
-        # Compute the forward kinematics to get the current head pose
-        self.current_head_pose = self.head_kinematics.fk(head_joint_positions)
-
-        # Check if the FK was successful
-        assert self.current_head_pose is not None, (
-            "FK failed to compute the current head pose."
-        )
-
-        # Store the last head joint positions
-        self.current_head_joint_positions = head_joint_positions
-
-        if antennas_joint_positions is not None:
-            self.current_antenna_joint_positions = antennas_joint_positions
-
-    def set_automatic_body_yaw(self, body_yaw: bool) -> None:
-        """Set the automatic body yaw.
-
-        Args:
-            body_yaw (bool): The yaw angle of the body.
-
-        """
-        self.head_kinematics.set_automatic_body_yaw(automatic_body_yaw=body_yaw)
+    # ------------------------------------------------------------------
+    # URDF
+    # ------------------------------------------------------------------
 
     def get_urdf(self) -> str:
-        """Get the URDF representation of the robot."""
+        """Return the URDF describing the robot."""
         urdf_path = Path(URDF_ROOT_PATH) / "robot.urdf"
-
         with open(urdf_path, "r") as f:
             return f.read()
 
-    # Multimedia methods
+    # ------------------------------------------------------------------
+    # Multimedia
+    # ------------------------------------------------------------------
+
     def play_sound(self, sound_file: str) -> None:
-        """Play a sound file from the assets directory.
-
-        Delegates to the media server's play_sound method.  If the server
-        is not available (no_media mode), this is a no-op.
-
-        Args:
-            sound_file (str): The name of the sound file to play (e.g., "wake_up.wav").
-
-        """
+        """Delegate to the media server; no-op in no_media mode."""
         if self._media_server is not None:
             self._media_server.play_sound(sound_file)
 
     def stop_sound(self) -> None:
-        """Stop the currently playing sound file.
-
-        Delegates to the media server's stop_sound method.  If the server
-        is not available (no_media mode), this is a no-op.
-        """
+        """Delegate to the media server; no-op in no_media mode."""
         if self._media_server is not None:
             self._media_server.stop_sound()
 
-    # Basic move definitions
-    INIT_HEAD_POSE = np.eye(4)
+    # ------------------------------------------------------------------
+    # Motor control (abstract)
+    # ------------------------------------------------------------------
 
-    SLEEP_HEAD_JOINT_POSITIONS = [
-        0,
-        -0.9848156658225817,
-        1.2624661884298831,
-        -0.24390294527381684,
-        0.20555342557667577,
-        -1.2363885150358267,
-        1.0032234352772091,
-    ]
-
-    INIT_ANTENNAS_JOINT_POSITIONS = np.array((-0.1745, 0.1745))  # ~10° offset to reduce shaking at vertical
-    SLEEP_ANTENNAS_JOINT_POSITIONS = np.array((-3.05, 3.05))
-    SLEEP_HEAD_POSE = np.array(
-        [
-            [0.911, 0.004, 0.413, -0.021],
-            [-0.004, 1.0, -0.001, 0.001],
-            [-0.413, -0.001, 0.911, -0.044],
-            [0.0, 0.0, 0.0, 1.0],
-        ]
-    )
-
-    async def wake_up(self) -> None:
-        """Wake up the robot - go to the initial head position and play the wake up emote and sound."""
-        await asyncio.sleep(0.1)
-
-        _, _, magic_distance = distance_between_poses(
-            self.get_current_head_pose(), self.INIT_HEAD_POSE
-        )
-
-        await self.goto_target(
-            self.INIT_HEAD_POSE,
-            antennas=self.INIT_ANTENNAS_JOINT_POSITIONS,
-            duration=magic_distance * 20 / 1000,  # ms_per_magic_mm = 10
-        )
-        await asyncio.sleep(0.1)
-
-        # Toudoum
-        self.play_sound("wake_up.wav")
-
-        # Roll 20° to the left
-        pose = self.INIT_HEAD_POSE.copy()
-        pose[:3, :3] = R.from_euler("xyz", [20, 0, 0], degrees=True).as_matrix()
-        await self.goto_target(pose, duration=0.2)
-
-        # Go back to the initial position
-        await self.goto_target(self.INIT_HEAD_POSE, duration=0.2)
-
-    async def goto_sleep(self) -> None:
-        """Put the robot to sleep by moving the head and antennas to a predefined sleep position.
-
-        - If we are already very close to the sleep position, we do nothing.
-        - If we are far from the sleep position:
-            - If we are far from the initial position, we move there first.
-            - If we are close to the initial position, we move directly to the sleep position.
-        """
-        # Magic units
-        _, _, dist_to_sleep_pose = distance_between_poses(
-            self.get_current_head_pose(), self.SLEEP_HEAD_POSE
-        )
-        _, _, dist_to_init_pose = distance_between_poses(
-            self.get_current_head_pose(), self.INIT_HEAD_POSE
-        )
-        sleep_time = 2.0
-
-        # Thresholds found empirically.
-        if dist_to_sleep_pose > 10:
-            if dist_to_init_pose > 30:
-                # Move to the initial position
-                await self.goto_target(
-                    self.INIT_HEAD_POSE, antennas=self.INIT_ANTENNAS_JOINT_POSITIONS, duration=1
-                )
-                await asyncio.sleep(0.2)
-
-            self.play_sound("go_sleep.wav")
-
-            # Move to the sleep position
-            await self.goto_target(
-                self.SLEEP_HEAD_POSE,
-                antennas=self.SLEEP_ANTENNAS_JOINT_POSITIONS,
-                duration=2,
-            )
-        else:
-            # The sound doesn't play fully if we don't wait enough
-            self.play_sound("go_sleep.wav")
-            sleep_time += 3
-
-        self._last_head_pose = self.SLEEP_HEAD_POSE
-        await asyncio.sleep(sleep_time)
-
-    # Motor control modes
     @abstractmethod
     def get_motor_control_mode(self) -> MotorControlMode:
-        """Get the motor control mode."""
-        pass
+        """Return the current motor control mode."""
 
     @abstractmethod
     def set_motor_control_mode(self, mode: MotorControlMode) -> None:
-        """Set the motor control mode."""
-        pass
+        """Set the motor control mode (enabled / disabled)."""
 
     @abstractmethod
     def set_motor_torque_ids(self, ids: list[str], on: bool) -> None:
-        """Set the motor torque for specific motor names."""
-        pass
+        """Toggle torque on the named motors."""
 
     def write_raw_packet(self, packet: bytes) -> bytes:
-        """Write a raw packet to the motor controller and return the response.
-
-        Args:
-            packet (bytes): The raw packet to send to the motor controller.
-
-        Returns:
-            bytes: The raw response packet from the motor controller.
-
-        """
+        """Write a raw packet to the motor controller (real-robot backend only)."""
         raise NotImplementedError(
-            "The method write_raw_packet is only available for the real robot backend."
+            "write_raw_packet is only available on the real-robot backend."
         )
 
-    def get_present_passive_joint_positions(self) -> Optional[Dict[str, float]]:
-        """Get the present passive joint positions.
-
-        Requires the Placo kinematics engine.
-        """
-        # This is would be better, and fix mypy issues, but Placo is dynamically imported
-        # if not isinstance(self.head_kinematics, PlacoKinematics):
-        if self.kinematics_engine != "Placo":
-            return None
-        return {
-            "passive_1_x": self.head_kinematics.get_joint("passive_1_x"),  # type: ignore [union-attr]
-            "passive_1_y": self.head_kinematics.get_joint("passive_1_y"),  # type: ignore [union-attr]
-            "passive_1_z": self.head_kinematics.get_joint("passive_1_z"),  # type: ignore [union-attr]
-            "passive_2_x": self.head_kinematics.get_joint("passive_2_x"),  # type: ignore [union-attr]
-            "passive_2_y": self.head_kinematics.get_joint("passive_2_y"),  # type: ignore [union-attr]
-            "passive_2_z": self.head_kinematics.get_joint("passive_2_z"),  # type: ignore [union-attr]
-            "passive_3_x": self.head_kinematics.get_joint("passive_3_x"),  # type: ignore [union-attr]
-            "passive_3_y": self.head_kinematics.get_joint("passive_3_y"),  # type: ignore [union-attr]
-            "passive_3_z": self.head_kinematics.get_joint("passive_3_z"),  # type: ignore [union-attr]
-            "passive_4_x": self.head_kinematics.get_joint("passive_4_x"),  # type: ignore [union-attr]
-            "passive_4_y": self.head_kinematics.get_joint("passive_4_y"),  # type: ignore [union-attr]
-            "passive_4_z": self.head_kinematics.get_joint("passive_4_z"),  # type: ignore [union-attr]
-            "passive_5_x": self.head_kinematics.get_joint("passive_5_x"),  # type: ignore [union-attr]
-            "passive_5_y": self.head_kinematics.get_joint("passive_5_y"),  # type: ignore [union-attr]
-            "passive_5_z": self.head_kinematics.get_joint("passive_5_z"),  # type: ignore [union-attr]
-            "passive_6_x": self.head_kinematics.get_joint("passive_6_x"),  # type: ignore [union-attr]
-            "passive_6_y": self.head_kinematics.get_joint("passive_6_y"),  # type: ignore [union-attr]
-            "passive_6_z": self.head_kinematics.get_joint("passive_6_z"),  # type: ignore [union-attr]
-            "passive_7_x": self.head_kinematics.get_joint("passive_7_x"),  # type: ignore [union-attr]
-            "passive_7_y": self.head_kinematics.get_joint("passive_7_y"),  # type: ignore [union-attr]
-            "passive_7_z": self.head_kinematics.get_joint("passive_7_z"),  # type: ignore [union-attr]
-        }
-
     # ------------------------------------------------------------------
-    # Transport-agnostic command processing
+    # Transport-agnostic command dispatch
     # ------------------------------------------------------------------
 
     def process_command(
@@ -868,13 +496,7 @@ class Backend:
         cmd: AnyCommand,
         send_response: Callable[[dict[str, Any]], None],
     ) -> None:
-        """Process a command from any transport (WebRTC data channel, WebSocket, ...).
-
-        Args:
-            cmd: A validated command model (parsed via command_adapter).
-            send_response: Callback to send a response dict back to the caller.
-
-        """
+        """Dispatch a validated command to the matching handler."""
         block_targets = self.is_move_running
 
         def _maybe_ignore(field: str) -> bool:
@@ -885,43 +507,41 @@ class Backend:
             )
             return True
 
-        if isinstance(cmd, SetTargetCmd):
-            if not _maybe_ignore("set_target"):
-                self.set_target_head_pose(np.array(cmd.head).reshape(4, 4))
-            send_response({"status": "ok", "command": "set_target"})
+        if isinstance(cmd, SetNeckCmd):
+            if not _maybe_ignore("set_neck"):
+                self.set_target_neck_joint_positions(np.array(cmd.joints))
+            send_response({"status": "ok", "command": "set_neck"})
 
-        elif isinstance(cmd, SetHeadJointsCmd):
-            if not _maybe_ignore("set_head_joints"):
-                self.set_target_head_joint_positions(np.array(cmd.joints))
-            send_response({"status": "ok", "command": "set_head_joints"})
+        elif isinstance(cmd, SetArmCmd):
+            if not _maybe_ignore("set_arm"):
+                if cmd.side == ArmSide.Left:
+                    self.set_target_left_arm_joint_positions(np.array(cmd.joints))
+                else:
+                    self.set_target_right_arm_joint_positions(np.array(cmd.joints))
+            send_response({"status": "ok", "command": "set_arm", "side": cmd.side.value})
 
-        elif isinstance(cmd, SetBodyYawCmd):
-            if not _maybe_ignore("set_body_yaw"):
-                self.set_target_body_yaw(cmd.body_yaw)
-            send_response({"status": "ok", "command": "set_body_yaw"})
-
-        elif isinstance(cmd, SetAntennasCmd):
-            if not _maybe_ignore("set_antennas"):
-                self.set_target_antenna_joint_positions(np.array(cmd.antennas))
-            send_response({"status": "ok", "command": "set_antennas"})
+        elif isinstance(cmd, SetNoseCmd):
+            if not _maybe_ignore("set_nose"):
+                self.set_target_nose_joint_positions(np.array(cmd.joints))
+            send_response({"status": "ok", "command": "set_nose"})
 
         elif isinstance(cmd, SetFullTargetCmd):
             if not _maybe_ignore("set_full_target"):
-                if cmd.head is not None:
-                    self.set_target_head_pose(np.array(cmd.head).reshape(4, 4))
-                if cmd.body_yaw is not None:
-                    self.set_target_body_yaw(cmd.body_yaw)
-                if cmd.antennas is not None:
-                    self.set_target_antenna_joint_positions(np.array(cmd.antennas))
+                self.set_target(
+                    neck=np.array(cmd.neck) if cmd.neck is not None else None,
+                    left_arm=np.array(cmd.left_arm) if cmd.left_arm is not None else None,
+                    right_arm=np.array(cmd.right_arm) if cmd.right_arm is not None else None,
+                    nose=np.array(cmd.nose) if cmd.nose is not None else None,
+                )
             send_response({"status": "ok", "command": "set_full_target"})
 
         elif isinstance(cmd, GotoTargetCmd):
-            head = np.array(cmd.head).reshape(4, 4) if cmd.head else None
-            antennas = np.array(cmd.antennas) if cmd.antennas else None
+            neck = np.array(cmd.neck) if cmd.neck is not None else None
+            left = np.array(cmd.left_arm) if cmd.left_arm is not None else None
+            right = np.array(cmd.right_arm) if cmd.right_arm is not None else None
+            nose = np.array(cmd.nose) if cmd.nose is not None else None
             asyncio.create_task(
-                self._async_goto(
-                    send_response, head, antennas, cmd.duration, cmd.body_yaw
-                )
+                self._async_goto(send_response, neck, left, right, nose, cmd.duration)
             )
 
         elif isinstance(cmd, WakeUpCmd):
@@ -950,30 +570,12 @@ class Backend:
         elif isinstance(cmd, GetMotorModeCmd):
             send_response({"motor_mode": self.get_motor_control_mode().value})
 
-        elif isinstance(cmd, SetGravityCompensationCmd):
-            try:
-                if cmd.enabled:
-                    self.set_motor_control_mode(MotorControlMode.GravityCompensation)
-                else:
-                    self.set_motor_control_mode(MotorControlMode.Enabled)
-            except ValueError as e:
-                send_response({"error": str(e), "command": "set_gravity_compensation"})
-                return
-            send_response({"status": "ok", "command": "set_gravity_compensation"})
-
-        elif isinstance(cmd, SetAutomaticBodyYawCmd):
-            self.set_automatic_body_yaw(cmd.enabled)
-            send_response({"status": "ok", "command": "set_automatic_body_yaw"})
-
         elif isinstance(cmd, GetStateCmd):
             state = {
-                "head_pose": self.get_present_head_pose().tolist()
-                if self.current_head_pose is not None
-                else None,
-                "antennas": self.get_present_antenna_joint_positions().tolist()
-                if self.current_antenna_joint_positions is not None
-                else None,
-                "body_yaw": self.get_present_body_yaw(),
+                "neck": self._safe_present(self.get_present_neck_joint_positions),
+                "left_arm": self._safe_present(self.get_present_left_arm_joint_positions),
+                "right_arm": self._safe_present(self.get_present_right_arm_joint_positions),
+                "nose": self._safe_present(self.get_present_nose_joint_positions),
                 "motor_mode": self.get_motor_control_mode().value,
                 "is_recording": self.is_recording,
                 "is_move_running": self.is_move_running,
@@ -988,53 +590,7 @@ class Backend:
             cmd,
             (SetVolumeCmd, GetVolumeCmd, SetMicrophoneVolumeCmd, GetMicrophoneVolumeCmd),
         ):
-            # Volume is a global robot setting, not per-session: a remote
-            # change persists for the next connection. This matches the
-            # semantics of the local REST /api/volume endpoints, which
-            # share the same VolumeControl singleton.
-            from dreambo_torso.daemon.app.routers.volume_control import (
-                get_volume_control,
-            )
-
-            try:
-                vc = get_volume_control()
-            except Exception as e:
-                # Unsupported platform or audio stack down — don't crash
-                # the command loop, just report failure to the caller.
-                self.logger.warning("Volume command failed (no control): %s", e)
-                send_response(
-                    {"error": f"Volume control unavailable: {e}", "command": cmd.type}
-                )
-            else:
-                if isinstance(cmd, SetVolumeCmd):
-                    ok = vc.set_output_volume(cmd.volume)
-                    send_response(
-                        {
-                            "status": "ok" if ok else "error",
-                            "command": "set_volume",
-                            "volume": cmd.volume if ok else vc.get_output_volume(),
-                        }
-                    )
-                elif isinstance(cmd, GetVolumeCmd):
-                    send_response(
-                        {"command": "get_volume", "volume": vc.get_output_volume()}
-                    )
-                elif isinstance(cmd, SetMicrophoneVolumeCmd):
-                    ok = vc.set_input_volume(cmd.volume)
-                    send_response(
-                        {
-                            "status": "ok" if ok else "error",
-                            "command": "set_microphone_volume",
-                            "volume": cmd.volume if ok else vc.get_input_volume(),
-                        }
-                    )
-                else:  # GetMicrophoneVolumeCmd
-                    send_response(
-                        {
-                            "command": "get_microphone_volume",
-                            "volume": vc.get_input_volume(),
-                        }
-                    )
+            self._handle_volume_command(cmd, send_response)
 
         elif isinstance(cmd, StartRecordingCmd):
             self.start_recording()
@@ -1050,18 +606,66 @@ class Backend:
             self.append_record(cmd.record)
             send_response({"status": "ok", "command": "append_record"})
 
+    def _safe_present(self, getter: Callable[[], NDArray[np.float64]]) -> list[float] | None:
+        """Call *getter* and return its result as a list, or None if no data yet."""
+        try:
+            arr = getter()
+        except (AssertionError, NotImplementedError, AttributeError):
+            return None
+        return arr.tolist() if arr is not None else None
+
+    def _handle_volume_command(
+        self,
+        cmd: SetVolumeCmd | GetVolumeCmd | SetMicrophoneVolumeCmd | GetMicrophoneVolumeCmd,
+        send_response: Callable[[dict[str, Any]], None],
+    ) -> None:
+        from dreambo_torso.daemon.app.routers.volume_control import get_volume_control
+
+        try:
+            vc = get_volume_control()
+        except Exception as e:
+            self.logger.warning("Volume command failed (no control): %s", e)
+            send_response({"error": f"Volume control unavailable: {e}", "command": cmd.type})
+            return
+
+        if isinstance(cmd, SetVolumeCmd):
+            ok = vc.set_output_volume(cmd.volume)
+            send_response(
+                {
+                    "status": "ok" if ok else "error",
+                    "command": "set_volume",
+                    "volume": cmd.volume if ok else vc.get_output_volume(),
+                }
+            )
+        elif isinstance(cmd, GetVolumeCmd):
+            send_response({"command": "get_volume", "volume": vc.get_output_volume()})
+        elif isinstance(cmd, SetMicrophoneVolumeCmd):
+            ok = vc.set_input_volume(cmd.volume)
+            send_response(
+                {
+                    "status": "ok" if ok else "error",
+                    "command": "set_microphone_volume",
+                    "volume": cmd.volume if ok else vc.get_input_volume(),
+                }
+            )
+        else:  # GetMicrophoneVolumeCmd
+            send_response(
+                {"command": "get_microphone_volume", "volume": vc.get_input_volume()}
+            )
+
     async def _async_goto(
         self,
         send_response: Callable[[dict[str, Any]], None],
-        head: Any,
-        antennas: Any,
+        neck: NDArray[np.float64] | None,
+        left_arm: NDArray[np.float64] | None,
+        right_arm: NDArray[np.float64] | None,
+        nose: NDArray[np.float64] | None,
         duration: float,
-        body_yaw: float | None,
     ) -> None:
-        """Execute goto_target and send response when done."""
+        """Run :meth:`goto_target` and report completion via *send_response*."""
         try:
             await self.goto_target(
-                head=head, antennas=antennas, duration=duration, body_yaw=body_yaw
+                neck=neck, left_arm=left_arm, right_arm=right_arm, nose=nose, duration=duration
             )
             send_response({"status": "ok", "command": "goto_target", "completed": True})
         except Exception as e:
@@ -1070,7 +674,7 @@ class Backend:
     async def _async_wake_up(
         self, send_response: Callable[[dict[str, Any]], None]
     ) -> None:
-        """Execute wake_up and send response when done."""
+        """Run :meth:`wake_up` and report completion via *send_response*."""
         try:
             await self.wake_up()
             send_response({"status": "ok", "command": "wake_up", "completed": True})
@@ -1080,7 +684,7 @@ class Backend:
     async def _async_goto_sleep(
         self, send_response: Callable[[dict[str, Any]], None]
     ) -> None:
-        """Execute goto_sleep and send response when done."""
+        """Run :meth:`goto_sleep` and report completion via *send_response*."""
         try:
             await self.goto_sleep()
             send_response({"status": "ok", "command": "goto_sleep", "completed": True})
@@ -1088,20 +692,11 @@ class Backend:
             send_response({"error": str(e), "command": "goto_sleep"})
 
     # ------------------------------------------------------------------
-    # WebRTC data channel interface (delegates to process_command)
+    # WebRTC data channel
     # ------------------------------------------------------------------
 
     def setup_media_server(self, media_server: Any) -> None:
-        """Connect the backend to the media server.
-
-        Stores a reference to the ``GstMediaServer`` for:
-        - WebRTC data channel message handling (robot control)
-        - Sound playback delegation (play_sound)
-
-        Args:
-            media_server: The ``GstMediaServer`` instance.
-
-        """
+        """Wire the media server for play_sound + WebRTC data-channel messages."""
         self._media_server = media_server
 
         _loop = asyncio.new_event_loop()

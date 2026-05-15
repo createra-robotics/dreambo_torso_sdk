@@ -1,10 +1,7 @@
-"""Mockup Simulation Backend for Reachy Mini.
+"""Mockup-sim backend: target positions become present positions immediately.
 
-A lightweight simulation backend that doesn't require MuJoCo.
-Target positions become current positions immediately (no physics).
-The kinematics engine is still used for FK/IK computations.
-
-Apps open the webcam/microphone directly (like with a real robot).
+No physics, no IK/FK — just an in-memory mirror of the joint state for
+software-only testing without MuJoCo or real hardware.
 """
 
 import time
@@ -14,157 +11,117 @@ import numpy as np
 import numpy.typing as npt
 
 from dreambo_torso.io.protocol import (
-    HeadPoseMsg,
     JointPositionsMsg,
     MockupSimBackendStatus,
     MotorControlMode,
 )
+from dreambo_torso.motion.named_poses import NamedPoses
 
-from ..abstract import Backend
+from ..abstract import ARM_DOF, NECK_DOF, NOSE_DOF, Backend, _named_poses_path
+
+
+def _initial_pose(poses: NamedPoses, name: str, sub: str, dof: int) -> npt.NDArray[np.float64]:
+    """Pick the named pose's joints for *sub* if present, else zero."""
+    if name in poses:
+        pose = poses[name]
+        arr = getattr(pose, sub, None)
+        if arr is not None:
+            return np.asarray(arr, dtype=np.float64).copy()
+    return np.zeros(dof, dtype=np.float64)
 
 
 class MockupSimBackend(Backend):
-    """Lightweight simulated Reachy Mini without MuJoCo.
+    """Lightweight in-memory simulation backend for the Dreambo torso."""
 
-    This backend provides a simple simulation where target positions
-    are applied immediately without physics simulation.
+    def __init__(self, use_audio: bool = True) -> None:
+        """Seed every subsystem at the bundled 'sleep' pose and start disabled."""
+        super().__init__(use_audio=use_audio)
 
-    Apps access webcam/microphone directly (not via UDP streaming).
-    """
+        poses = NamedPoses.load(_named_poses_path())
+        self._neck = _initial_pose(poses, "sleep", "neck", NECK_DOF)
+        self._left_arm = _initial_pose(poses, "sleep", "left_arm", ARM_DOF)
+        self._right_arm = _initial_pose(poses, "sleep", "right_arm", ARM_DOF)
+        self._nose = _initial_pose(poses, "sleep", "nose", NOSE_DOF)
 
-    def __init__(
-        self,
-        check_collision: bool = False,
-        kinematics_engine: str = "AnalyticalKinematics",
-        use_audio: bool = True,
-    ) -> None:
-        """Initialize the MockupSimBackend.
-
-        Args:
-            check_collision: If True, enable collision checking. Default is False.
-            kinematics_engine: Kinematics engine to use. Defaults to "AnalyticalKinematics".
-            use_audio: If True, use audio. Default is True.
-
-        """
-        super().__init__(
-            check_collision=check_collision,
-            kinematics_engine=kinematics_engine,
-            use_audio=use_audio,
-        )
-
-        from dreambo_torso.dreambo_torso import (
-            SLEEP_ANTENNAS_JOINT_POSITIONS,
-            SLEEP_HEAD_JOINT_POSITIONS,
-        )
-
-        # Initialize with sleep positions
-        self._head_joint_positions: npt.NDArray[np.float64] = np.array(
-            SLEEP_HEAD_JOINT_POSITIONS, dtype=np.float64
-        )
-        self._antenna_joint_positions: npt.NDArray[np.float64] = np.array(
-            SLEEP_ANTENNAS_JOINT_POSITIONS, dtype=np.float64
-        )
+        self.current_neck_joint_positions = self._neck.copy()
+        self.current_left_arm_joint_positions = self._left_arm.copy()
+        self.current_right_arm_joint_positions = self._right_arm.copy()
+        self.current_nose_joint_positions = self._nose.copy()
 
         self._motor_control_mode = MotorControlMode.Enabled
-
-        # Control loop frequency
         self.control_frequency = 50.0  # Hz
 
     def run(self) -> None:
-        """Run the simulation loop.
-
-        In mockup-sim mode, target positions are applied immediately.
-        """
+        """Mirror targets to present positions at the control loop frequency."""
         control_period = 1.0 / self.control_frequency
-
-        # Initialize kinematics with current positions
-        self.update_head_kinematics_model(
-            self._head_joint_positions,
-            self._antenna_joint_positions,
-        )
 
         while not self.should_stop.is_set():
             start_t = time.time()
 
-            # Apply target positions immediately (no physics)
-            if self.target_head_joint_positions is not None:
-                self._head_joint_positions = self.target_head_joint_positions.copy()
-            if self.target_antenna_joint_positions is not None:
-                self._antenna_joint_positions = (
-                    self.target_antenna_joint_positions.copy()
-                )
+            if self.target_neck_joint_positions is not None:
+                self._neck = self.target_neck_joint_positions.copy()
+            if self.target_left_arm_joint_positions is not None:
+                self._left_arm = self.target_left_arm_joint_positions.copy()
+            if self.target_right_arm_joint_positions is not None:
+                self._right_arm = self.target_right_arm_joint_positions.copy()
+            if self.target_nose_joint_positions is not None:
+                self._nose = self.target_nose_joint_positions.copy()
 
-            # Update current states
-            self.current_head_joint_positions = self._head_joint_positions.copy()
-            self.current_antenna_joint_positions = self._antenna_joint_positions.copy()
+            self.current_neck_joint_positions = self._neck.copy()
+            self.current_left_arm_joint_positions = self._left_arm.copy()
+            self.current_right_arm_joint_positions = self._right_arm.copy()
+            self.current_nose_joint_positions = self._nose.copy()
 
-            # Update kinematics model (computes FK)
-            self.update_head_kinematics_model(
-                self.current_head_joint_positions,
-                self.current_antenna_joint_positions,
-            )
-
-            # Update target head joint positions from IK if necessary
-            if self.ik_required:
-                try:
-                    self.update_target_head_joints_from_ik(
-                        self.target_head_pose, self.target_body_yaw
-                    )
-                except ValueError:
-                    pass  # IK failed, keep current positions
-
-            if (
-                self.joint_positions_publisher is not None
-                and self.pose_publisher is not None
-                and not self.is_shutting_down
-            ):
+            if self.joint_positions_publisher is not None and not self.is_shutting_down:
                 self.joint_positions_publisher.put(
                     JointPositionsMsg(
-                        head_joint_positions=self.current_head_joint_positions.tolist(),
-                        antennas_joint_positions=self.current_antenna_joint_positions.tolist(),
-                    )
-                )
-                self.pose_publisher.put(
-                    HeadPoseMsg(
-                        head_pose=self.get_present_head_pose().tolist(),
+                        neck=self._neck.tolist(),
+                        left_arm=self._left_arm.tolist(),
+                        right_arm=self._right_arm.tolist(),
+                        nose=self._nose.tolist(),
                     )
                 )
 
             self.ready.set()
 
-            # Sleep to maintain control frequency
             elapsed = time.time() - start_t
-            time.sleep(max(0, control_period - elapsed))
+            time.sleep(max(0.0, control_period - elapsed))
 
     def get_status(self) -> "MockupSimBackendStatus":
-        """Get the status of the backend."""
+        """Return the cached :class:`MockupSimBackendStatus`."""
         return MockupSimBackendStatus(motor_control_mode=self._motor_control_mode)
 
-    def get_present_head_joint_positions(
+    def get_present_neck_joint_positions(
         self,
-    ) -> Annotated[npt.NDArray[np.float64], (7,)]:
-        """Get the current joint positions of the head."""
-        return self._head_joint_positions.copy()
+    ) -> Annotated[npt.NDArray[np.float64], (NECK_DOF,)]:
+        """Return the current neck joint positions."""
+        return self._neck.copy()
 
-    def get_present_antenna_joint_positions(
+    def get_present_left_arm_joint_positions(
         self,
-    ) -> Annotated[npt.NDArray[np.float64], (2,)]:
-        """Get the current joint positions of the antennas."""
-        return self._antenna_joint_positions.copy()
+    ) -> Annotated[npt.NDArray[np.float64], (ARM_DOF,)]:
+        """Return the current left-arm joint positions."""
+        return self._left_arm.copy()
+
+    def get_present_right_arm_joint_positions(
+        self,
+    ) -> Annotated[npt.NDArray[np.float64], (ARM_DOF,)]:
+        """Return the current right-arm joint positions."""
+        return self._right_arm.copy()
+
+    def get_present_nose_joint_positions(
+        self,
+    ) -> Annotated[npt.NDArray[np.float64], (NOSE_DOF,)]:
+        """Return the current nose joint positions."""
+        return self._nose.copy()
 
     def get_motor_control_mode(self) -> MotorControlMode:
-        """Get the motor control mode."""
+        """Return the current motor control mode."""
         return self._motor_control_mode
 
     def set_motor_control_mode(self, mode: MotorControlMode) -> None:
-        """Set the motor control mode."""
+        """Set the motor control mode (no-op physics; just records state)."""
         self._motor_control_mode = mode
 
     def set_motor_torque_ids(self, ids: list[str], on: bool) -> None:
-        """Set the motor torque state for specific motor names.
-
-        No-op in mockup-sim mode.
-        """
-        pass
-
-
+        """No-op in mockup-sim mode."""

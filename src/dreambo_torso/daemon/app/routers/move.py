@@ -1,11 +1,4 @@
-"""Movement-related API routes.
-
-This exposes:
-- goto
-- play (wake_up, goto_sleep)
-- stop running moves
-- set_target and streaming set_target
-"""
+"""Movement HTTP / WebSocket routes for the Dreambo torso daemon."""
 
 import asyncio
 import json
@@ -22,7 +15,7 @@ from dreambo_torso.utils.interpolation import InterpolationTechnique
 
 from ....daemon.backend.abstract import Backend
 from ..dependencies import get_backend, ws_get_backend
-from ..models import AnyPose, FullBodyTarget
+from ..models import FullBodyTarget
 
 move_tasks: dict[UUID, asyncio.Task[None]] = {}
 move_listeners: list[WebSocket] = []
@@ -34,9 +27,10 @@ router = APIRouter(prefix="/move")
 class GotoModelRequest(BaseModel):
     """Request model for the goto endpoint."""
 
-    head_pose: AnyPose | None = None
-    antennas: tuple[float, float] | None = None
-    body_yaw: float | None = None
+    neck: list[float] | None = None         # [yaw, pitch, roll]
+    left_arm: list[float] | None = None     # [theta_a, theta_b]
+    right_arm: list[float] | None = None    # [theta_a, theta_b]
+    nose: list[float] | None = None         # [top, left, right]
     duration: float
     interpolation: InterpolationTechnique = InterpolationTechnique.MIN_JERK
 
@@ -44,21 +38,15 @@ class GotoModelRequest(BaseModel):
         "json_schema_extra": {
             "examples": [
                 {
-                    "head_pose": {
-                        "x": 0.0,
-                        "y": 0.0,
-                        "z": 0.0,
-                        "roll": 0.0,
-                        "pitch": 0.0,
-                        "yaw": 0.0,
-                    },
-                    "antennas": [0.0, 0.0],
-                    "body_yaw": 0.0,
+                    "neck": [0.0, 0.2, 0.0],
+                    "left_arm": [0.0, 0.0],
+                    "right_arm": [0.0, 0.0],
+                    "nose": [0.0, 0.0, 0.0],
                     "duration": 2.0,
                     "interpolation": "minjerk",
                 },
                 {
-                    "antennas": [0.0, 0.0],
+                    "neck": [0.0, 0.4, 0.0],
                     "duration": 1.0,
                     "interpolation": "linear",
                 },
@@ -81,11 +69,7 @@ def create_move_task(coro: Coroutine[Any, Any, None]) -> MoveUUID:
         for ws in move_listeners:
             try:
                 await ws.send_json(
-                    {
-                        "type": message,
-                        "uuid": str(uuid),
-                        "details": details,
-                    }
+                    {"type": message, "uuid": str(uuid), "details": details}
                 )
             except (RuntimeError, WebSocketDisconnect):
                 move_listeners.remove(ws)
@@ -104,33 +88,28 @@ def create_move_task(coro: Coroutine[Any, Any, None]) -> MoveUUID:
 
     task = asyncio.create_task(wrap_coro())
     move_tasks[uuid] = task
-
     return MoveUUID(uuid=uuid)
 
 
 async def stop_move_task(uuid: UUID) -> dict[str, str]:
-    """Stop a running move task by cancelling it."""
+    """Cancel a running move task by UUID."""
     if uuid not in move_tasks:
         raise KeyError(f"Running move with UUID {uuid} not found")
 
     task = move_tasks.pop(uuid, None)
     assert task is not None
+    if task.cancel():
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
-    if task:
-        if task.cancel():
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
-
-    return {
-        "message": f"Stopped move with UUID: {uuid}",
-    }
+    return {"message": f"Stopped move with UUID: {uuid}"}
 
 
 @router.get("/running")
 async def get_running_moves() -> list[MoveUUID]:
-    """Get a list of currently running move tasks."""
+    """List currently running move tasks."""
     return [MoveUUID(uuid=uuid) for uuid in move_tasks.keys()]
 
 
@@ -138,39 +117,38 @@ async def get_running_moves() -> list[MoveUUID]:
 async def goto(
     goto_req: GotoModelRequest, backend: Backend = Depends(get_backend)
 ) -> MoveUUID:
-    """Request a movement to a specific target."""
+    """Request a movement to per-subsystem joint targets."""
     return create_move_task(
         backend.goto_target(
-            head=goto_req.head_pose.to_pose_array() if goto_req.head_pose else None,
-            antennas=np.array(goto_req.antennas) if goto_req.antennas else None,
-            body_yaw=goto_req.body_yaw,
+            neck=np.array(goto_req.neck) if goto_req.neck else None,
+            left_arm=np.array(goto_req.left_arm) if goto_req.left_arm else None,
+            right_arm=np.array(goto_req.right_arm) if goto_req.right_arm else None,
+            nose=np.array(goto_req.nose) if goto_req.nose else None,
             duration=goto_req.duration,
+            method=goto_req.interpolation,
         )
     )
 
 
 @router.post("/play/wake_up")
 async def play_wake_up(backend: Backend = Depends(get_backend)) -> MoveUUID:
-    """Request the robot to wake up."""
+    """Trigger the wake-up named pose + sound."""
     return create_move_task(backend.wake_up())
 
 
 @router.post("/play/goto_sleep")
 async def play_goto_sleep(backend: Backend = Depends(get_backend)) -> MoveUUID:
-    """Request the robot to go to sleep."""
+    """Trigger the sleep named pose + sound."""
     return create_move_task(backend.goto_sleep())
 
 
 @router.get("/recorded-move-datasets/list/{dataset_name:path}")
-async def list_recorded_move_dataset(
-    dataset_name: str,
-) -> list[str]:
+async def list_recorded_move_dataset(dataset_name: str) -> list[str]:
     """List available recorded moves in a dataset."""
     try:
         moves = RecordedMoves(dataset_name)
     except NotExistError as e:
         raise HTTPException(status_code=404, detail=str(e))
-
     return moves.list_moves()
 
 
@@ -180,7 +158,7 @@ async def play_recorded_move_dataset(
     move_name: str,
     backend: Backend = Depends(get_backend),
 ) -> MoveUUID:
-    """Request the robot to play a predefined recorded move from a dataset."""
+    """Play a recorded move from a ModelScope dataset."""
     try:
         recorded_moves = RecordedMoves(dataset_name)
     except NotExistError as e:
@@ -199,10 +177,8 @@ async def stop_move(uuid: MoveUUID) -> dict[str, str]:
 
 
 @router.websocket("/ws/updates")
-async def ws_move_updates(
-    websocket: WebSocket,
-) -> None:
-    """WebSocket route to stream move updates."""
+async def ws_move_updates(websocket: WebSocket) -> None:
+    """Stream move updates to listeners."""
     await websocket.accept()
     try:
         move_listeners.append(websocket)
@@ -218,17 +194,15 @@ async def set_target(
     target: FullBodyTarget,
     backend: Backend = Depends(get_backend),
 ) -> dict[str, str]:
-    """POST route to set a single FullBodyTarget."""
+    """Apply per-subsystem joint targets immediately (no interpolation)."""
     if backend.is_move_running:
-        # Avoid fighting with the daemon while a trajectory is running
         backend.logger.warning("Ignoring set_target request: move already running.")
         return {"status": "ignored", "reason": "move_running"}
     backend.set_target(
-        head=target.target_head_pose.to_pose_array()
-        if target.target_head_pose
-        else None,
-        antennas=np.array(target.target_antennas) if target.target_antennas else None,
-        body_yaw=target.target_body_yaw,
+        neck=np.array(target.target_neck) if target.target_neck else None,
+        left_arm=np.array(target.target_left_arm) if target.target_left_arm else None,
+        right_arm=np.array(target.target_right_arm) if target.target_right_arm else None,
+        nose=np.array(target.target_nose) if target.target_nose else None,
     )
     return {"status": "ok"}
 
@@ -237,7 +211,7 @@ async def set_target(
 async def ws_set_target(
     websocket: WebSocket, backend: Backend = Depends(ws_get_backend)
 ) -> None:
-    """WebSocket route to stream FullBodyTarget set_target calls."""
+    """Stream :class:`FullBodyTarget` updates to the daemon."""
     await websocket.accept()
     try:
         while True:
@@ -245,7 +219,6 @@ async def ws_set_target(
             try:
                 target = FullBodyTarget.model_validate_json(data)
                 await set_target(target, backend)
-
             except Exception as e:
                 await websocket.send_text(
                     json.dumps({"status": "error", "detail": str(e)})
@@ -259,12 +232,8 @@ async def write(
     websocket: WebSocket,
     backend: Backend = Depends(ws_get_backend),
 ) -> None:
-    """WebSocket endpoint to stream raw packet to the serialport and return any response buffer.
-
-    Returns an empty bytes if no response is received.
-    """
+    """Forward raw packets to the motor controller and stream back its responses."""
     await websocket.accept()
-
     try:
         while True:
             data = await websocket.receive_bytes()

@@ -8,7 +8,7 @@ thread-safe bridge (loop.call_soon_threadsafe).
 Client->Server messages use {"type": "...", ...} (parsed via command_adapter).
 
 Server->Client messages are Pydantic models serialized to JSON, e.g.:
-    {"type": "joint_positions", "head_joint_positions": [...], ...}
+    {"type": "joint_positions", "neck": [...], "left_arm": [...], ...}
     {"type": "task_progress", "uuid": "...", "finished": true, ...}
 """
 
@@ -60,7 +60,6 @@ class WSServer(AbstractServer):
         # publisher works for every topic.
         publisher = Publisher(self._broadcast)
         self.backend.set_joint_positions_publisher(publisher)
-        self.backend.set_pose_publisher(publisher)
         self.backend.set_imu_publisher(publisher)
         self.backend.set_recording_publisher(publisher)
 
@@ -173,11 +172,12 @@ class WSServer(AbstractServer):
                 error = None
                 try:
                     await self.backend.goto_target(
-                        head=np.array(req.head).reshape(4, 4) if req.head else None,
-                        antennas=np.array(req.antennas) if req.antennas else None,
+                        neck=np.array(req.neck) if req.neck else None,
+                        left_arm=np.array(req.left_arm) if req.left_arm else None,
+                        right_arm=np.array(req.right_arm) if req.right_arm else None,
+                        nose=np.array(req.nose) if req.nose else None,
                         duration=req.duration,
                         method=req.method,
-                        body_yaw=req.body_yaw,
                     )
                 except Exception as e:
                     error = str(e)

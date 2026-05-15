@@ -80,10 +80,10 @@ def main() -> None:
             print(f"Audio recording failed: {e}")
 
         # The robot is still controllable while media is released
-        print("\nWiggling antennas to prove robot control still works...")
-        mini.goto_target(antennas=[0.3, -0.3], duration=0.5)
+        print("\nNudging the neck to prove robot control still works...")
+        mini.goto_target(neck=[0.3, 0.2, 0.0], duration=0.5)
         time.sleep(0.2)
-        mini.goto_target(antennas=[0.0, 0.0], duration=0.5)
+        mini.goto_target(neck=[0.0, 0.2, 0.0], duration=0.5)
 
     # __exit__ automatically calls acquire_media() → daemon reclaims hardware
     print("\nDone. Daemon media re-acquired on exit.")

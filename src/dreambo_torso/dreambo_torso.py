@@ -1,9 +1,8 @@
-"""Dreambo class for controlling a simulated or real Dreambo torso.
+"""High-level SDK class for the Dreambo torso.
 
-This class provides methods to control the arms, nose, eyeballs, eyebrow and eyelid of the Dreambo torso,
-set their target positions, and perform various behaviors such as waking up and going to sleep.
-
-It also includes methods for multimedia interactions like playing sounds and looking at specific points in the image frame or world coordinates.
+The new torso exposes four joint-space subsystems — neck, left_arm,
+right_arm, nose — plus media (camera, microphone, sound) and recording.
+There is no head pose, no antennas, no body_yaw, and no Stewart platform.
 """
 
 import asyncio
@@ -11,83 +10,48 @@ import logging
 import time
 import warnings
 from importlib.metadata import PackageNotFoundError, version
-from typing import Dict, List, Literal, Optional, Union, cast
+from typing import Any, Dict, List, Literal, Optional, cast
 
 import numpy as np
 import numpy.typing as npt
 from asgiref.sync import async_to_sync
-from scipy.spatial.transform import Rotation as R
 
 from dreambo_torso.daemon.utils import daemon_check, is_local_camera_available
 from dreambo_torso.io.protocol import (
     AppendRecordCmd,
+    ArmSide,
     DaemonStatus,
     GotoTaskRequest,
-    SetAntennasCmd,
-    SetAutomaticBodyYawCmd,
-    SetBodyYawCmd,
+    SetArmCmd,
     SetFullTargetCmd,
-    SetGravityCompensationCmd,
-    SetHeadJointsCmd,
-    SetTargetCmd,
+    SetNeckCmd,
+    SetNoseCmd,
     SetTorqueCmd,
     StartRecordingCmd,
     StopRecordingCmd,
 )
 from dreambo_torso.io.ws_client import WSClient
-from dreambo_torso.media.camera_constants import get_camera_specs_by_name
-from dreambo_torso.media.camera_utils import undistort_points
 from dreambo_torso.media.media_manager import MediaBackend, MediaManager
-from dreambo_torso.motion.move import Move
-from dreambo_torso.utils.interpolation import InterpolationTechnique, minimum_jerk
-
-# Behavior definitions
-INIT_HEAD_POSE = np.eye(4)
-
-SLEEP_HEAD_JOINT_POSITIONS = [
-    0,
-    -0.9848156658225817,
-    1.2624661884298831,
-    -0.24390294527381684,
-    0.20555342557667577,
-    -1.2363885150358267,
-    1.0032234352772091,
-]
-
-INIT_ANTENNAS_JOINT_POSITIONS = [-0.1745, 0.1745]  # ~10° offset to reduce shaking at vertical
-
-SLEEP_ANTENNAS_JOINT_POSITIONS = [-3.05, 3.05]
-
-SLEEP_HEAD_POSE = np.array(
-    [
-        [0.911, 0.004, 0.413, -0.021],
-        [-0.004, 1.0, -0.001, 0.001],
-        [-0.413, -0.001, 0.911, -0.044],
-        [0.0, 0.0, 0.0, 1.0],
-    ]
-)
+from dreambo_torso.motion.move import JointTargets, Move
+from dreambo_torso.utils.interpolation import InterpolationTechnique
 
 ConnectionMode = Literal["auto", "localhost_only", "network"]
 
 
+def _as_list(value: Optional[npt.NDArray[np.float64] | List[float]]) -> Optional[List[float]]:
+    """Coerce *value* to a Python list of floats, or pass through None."""
+    if value is None:
+        return None
+    return list(np.asarray(value, dtype=np.float64).reshape(-1))
+
+
 class Dreambo:
-    """dreambo_torso class for controlling a simulated or real robot torso.
+    """Client for the Dreambo torso daemon.
 
-    Args:
-        robot_name: Name of the robot, defaults to "reachy_mini".
-        host: Hostname or IP of the daemon. Defaults to "reachy-mini.local".
-            In ``"auto"`` mode this is only used as a fallback when localhost
-            is unreachable, so the default works out of the box for local
-            development.
-        port: Port of the daemon's FastAPI server. Defaults to 8000.
-        connection_mode: Select how to connect to the daemon. Use
-            `"localhost_only"` to restrict connections to daemons running on
-            localhost, `"network"` to connect to a remote daemon at *host:port*,
-            or `"auto"` (default) to try localhost first then fall back to
-            *host:port*.
-        spawn_daemon (bool): If True, will spawn a daemon to control the robot, defaults to False.
-        use_sim (bool): If True and spawn_daemon is True, will spawn a simulated robot, defaults to True.
-
+    Drives the four joint-space subsystems and exposes media (camera,
+    microphone, sound) plus recording. Kinematics (neck FK/IK, arm
+    spherical 5-bar) will land later from the dreambo-torso-kinematics
+    crate; this class currently speaks only joint angles.
     """
 
     def __init__(
@@ -99,91 +63,50 @@ class Dreambo:
         spawn_daemon: bool = False,
         use_sim: bool = False,
         timeout: float = 5.0,
-        automatic_body_yaw: bool = True,
         log_level: str = "INFO",
         media_backend: str = "default",
         localhost_only: Optional[bool] = None,
     ) -> None:
-        """Initialize the Dreambo robot.
-
-        Args:
-            robot_name (str): Name of the robot, defaults to "dreambo_torso".
-            host (str): Hostname or IP of the daemon. Defaults to
-                "dreambo_torso.local".  In ``"auto"`` mode (the default) the
-                client first tries ``localhost``; *host* is only used as a
-                fallback or when *connection_mode* is ``"network"``.
-            port (int): Port of the daemon's FastAPI server. Defaults to 8000.
-            connection_mode: `"auto"` (default), `"localhost_only"` or `"network"`.
-                `"auto"` will first try daemons on localhost and fall back to
-                *host:port* if no local daemon responds.
-            localhost_only (Optional[bool]): Deprecated alias for the connection
-                mode. Set `False` to search for network daemons. Will be removed
-                in a future release.
-            spawn_daemon (bool): If True, will spawn a daemon to control the robot, defaults to False.
-            use_sim (bool): If True and spawn_daemon is True, will spawn a simulated robot, defaults to True.
-            timeout (float): Timeout for the client connection, defaults to 5.0 seconds.
-            automatic_body_yaw (bool): If True, the body yaw will be used to compute the IK and FK. Default is False.
-            log_level (str): Logging level, defaults to "INFO".
-            media_backend (str): ``"default"`` for auto-detection (LOCAL if on the
-                same machine as the daemon, otherwise WebRTC), ``"no_media"`` to
-                skip all media, or a specific ``MediaBackend`` value name.
-
-        It will try to connect to the daemon, and if it fails, it will raise an exception.
-
-        """
+        """Connect to the daemon and prepare the media manager."""
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
         self.robot_name = robot_name
         self.host = host
         self.port = port
         daemon_check(spawn_daemon, use_sim)
-        normalized_mode = self._normalize_connection_mode(
-            connection_mode, localhost_only
-        )
-        self.client, self.connection_mode = self._initialize_client(
-            normalized_mode, timeout
-        )
+        normalized_mode = self._normalize_connection_mode(connection_mode, localhost_only)
+        self.client, self.connection_mode = self._initialize_client(normalized_mode, timeout)
         self._daemon_http_url = f"http://{self.client.host}:{self.client.port}"
-        self.set_automatic_body_yaw(automatic_body_yaw)
-        self._last_head_pose: Optional[npt.NDArray[np.float64]] = None
         self.is_recording = False
         self._move_cancelled = False
         self._media_released = False
         self._log_level = log_level
         self._media_backend = media_backend
-        self.T_head_cam = np.eye(4)
-        self.T_head_cam[:3, 3][:] = [0.0437, 0, 0.0512]
-        self.T_head_cam[:3, :3] = np.array(
-            [
-                [0, 0, 1],
-                [-1, 0, 0],
-                [0, -1, 0],
-            ]
-        )
         self.media_manager = self._configure_mediamanager(media_backend, log_level)
 
     def __del__(self) -> None:
-        """Destroy the Dreambo instance.
-
-        The client is disconnected explicitly to avoid a thread pending issue.
-        """
+        """Disconnect the underlying WebSocket client."""
         if hasattr(self, "client"):
             self.client.disconnect()
 
     def __enter__(self) -> "Dreambo":
-        """Context manager entry point for Dreambo."""
+        """Enter the runtime context (no-op; provided for ergonomics)."""
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback) -> None:  # type: ignore [no-untyped-def]
-        """Context manager exit point for Dreambo."""
+    def __exit__(self, exc_type, exc_value, traceback) -> None:  # type: ignore[no-untyped-def]
+        """Leave the runtime context, re-acquiring media if needed and disconnecting."""
         if self._media_released:
             self.acquire_media()
         self.media_manager.close()
         self.client.disconnect()
 
+    # ------------------------------------------------------------------
+    # Media plumbing
+    # ------------------------------------------------------------------
+
     @property
     def media(self) -> MediaManager:
-        """Expose the MediaManager instance used by Dreambo."""
+        """The :class:`MediaManager` (camera + microphone + audio playback)."""
         return self.media_manager
 
     @property
@@ -192,39 +115,22 @@ class Dreambo:
         return self._media_released
 
     def release_media(self) -> None:
-        """Tell the daemon to release camera and audio hardware.
-
-        After calling this, the camera and microphone are available for direct
-        access via OpenCV / sounddevice / etc.  The SDK's media_manager is
-        switched to NO_MEDIA.
-
-        Idempotent: safe to call multiple times.
-        """
+        """Hand camera/audio hardware over to direct (non-daemon) clients."""
         if self._media_released:
             return
-
         self.client.release_media()
-
         if hasattr(self, "media_manager"):
             self.media_manager.close()
         self._media_released = True
         self.logger.info("Media released — camera/mic available for direct access.")
 
     def acquire_media(self) -> None:
-        """Tell the daemon to re-acquire camera and audio hardware.
-
-        The SDK's media_manager is re-created with the original backend
-        auto-detection logic.
-
-        Idempotent: safe to call multiple times.
-        """
+        """Re-acquire camera/audio hardware via the daemon."""
         if not self._media_released:
             return
-
         if not self.client.acquire_media():
             self.logger.error("Failed to re-acquire media on daemon.")
             return
-
         self.media_manager.close()
         self.media_manager = self._configure_mediamanager(self._media_backend, self._log_level)
         self._media_released = False
@@ -232,60 +138,23 @@ class Dreambo:
 
     @property
     def imu(self) -> Dict[str, List[float] | float] | None:
-        """Get the current IMU data from the backend.
-
-        Returns:
-            dict with the following keys, or None if IMU is not available (Lite version)
-            or no data received yet:
-            - 'accelerometer': [x, y, z] in m/s^2
-            - 'gyroscope': [x, y, z] in rad/s
-            - 'quaternion': [w, x, y, z] orientation quaternion
-            - 'temperature': float in °C
-
-        Note:
-            - Data is cached from the last update at 50Hz
-            - Quaternion is in [w, x, y, z] format
-
-        Example:
-            >>> imu_data = reachy.imu
-            >>> if imu_data is not None:
-            >>>     accel_x, accel_y, accel_z = imu_data['accelerometer']
-            >>>     gyro_x, gyro_y, gyro_z = imu_data['gyroscope']
-            >>>     quat_w, quat_x, quat_y, quat_z = imu_data['quaternion']
-            >>>     temp = imu_data['temperature']
-
-        """
+        """The latest cached IMU sample, or None if no IMU is wired up."""
         imu_msg = self.client.get_current_imu_data()
         if imu_msg is None:
             return None
         return imu_msg.model_dump(exclude={"type"})
 
-    def _configure_mediamanager(
-        self, media_backend: str, log_level: str
-    ) -> MediaManager:
-        """Select the right media backend and return a configured MediaManager.
-
-        Decision logic (in order of priority):
-        1. User explicitly passed ``"no_media"`` → NO_MEDIA.
-        2. Daemon reports ``no_media=True`` → NO_MEDIA (daemon has no media).
-        3. The daemon's IPC camera endpoint is reachable locally → LOCAL.
-        4. Otherwise → WEBRTC (remote streaming from daemon).
-
-        If the user passes a specific backend string that maps to an enum
-        value it is honoured directly (with deprecation warnings for old
-        names handled by ``_resolve_backend``).
-        """
+    def _configure_mediamanager(self, media_backend: str, log_level: str) -> MediaManager:
+        """Pick a :class:`MediaBackend` and return a configured :class:`MediaManager`."""
         daemon_status = self.client.get_status()
         self._warn_if_daemon_version_mismatch(daemon_status)
 
-        # Resolve camera specs from the daemon-detected camera name
         specs_name = getattr(daemon_status, "camera_specs_name", "")
+        from dreambo_torso.media.camera_constants import get_camera_specs_by_name
         camera_specs = get_camera_specs_by_name(specs_name) if specs_name else None
 
-        # Honour explicit no_media from user or daemon
         if media_backend.lower() == "no_media":
             self.logger.info("No media backend requested by user.")
-            # If the daemon owns media hardware, release it for direct access
             if (
                 not getattr(daemon_status, "no_media", False)
                 and not self._media_released
@@ -293,27 +162,16 @@ class Dreambo:
                 self.release_media()
             mbackend = MediaBackend.NO_MEDIA
         elif getattr(daemon_status, "no_media", False):
-            self.logger.info(
-                "Daemon reports no_media=True — skipping media initialisation."
-            )
+            self.logger.info("Daemon reports no_media=True — skipping media initialisation.")
             mbackend = MediaBackend.NO_MEDIA
         elif media_backend.lower() in ("default", "auto"):
-            # Auto-detect: local IPC if available, else WebRTC.
-            # IPC only makes sense when the daemon runs on the same machine
-            # (connection_mode == "localhost_only").  For network connections
-            # (wireless robot) we always stream via WebRTC.
             if self.connection_mode == "localhost_only" and is_local_camera_available():
-                self.logger.info(
-                    "Auto-detected local IPC endpoint. Using LOCAL backend."
-                )
+                self.logger.info("Auto-detected local IPC endpoint. Using LOCAL backend.")
                 mbackend = MediaBackend.LOCAL
             else:
-                self.logger.info(
-                    "No local IPC endpoint. Using WebRTC backend for streaming."
-                )
+                self.logger.info("No local IPC endpoint. Using WebRTC backend for streaming.")
                 mbackend = MediaBackend.WEBRTC
         else:
-            # User specified a particular backend name — try to resolve it
             try:
                 mbackend = MediaBackend(media_backend.lower())
             except ValueError:
@@ -344,75 +202,54 @@ class Dreambo:
             return None
 
     def _warn_if_daemon_version_mismatch(self, daemon_status: DaemonStatus) -> None:
-        """Warn users when the SDK and daemon package versions differ."""
         sdk_version = self._get_sdk_version()
         daemon_version = daemon_status.version
-
         if sdk_version is None or daemon_version is None:
             return
-
-        sdk_version = sdk_version.strip()
-        daemon_version = daemon_version.strip()
-
-        if sdk_version == daemon_version:
+        if sdk_version.strip() == daemon_version.strip():
             return
-
         warnings.warn(
-            "Dreambo SDK and daemon versions do not match: "
-            f"SDK={sdk_version}, daemon={daemon_version}. "
-            "Running different versions can create issues. "
-            "Install matching reachy_mini versions for the SDK and daemon.",
+            f"Dreambo SDK and daemon versions do not match: "
+            f"SDK={sdk_version}, daemon={daemon_version}.",
             RuntimeWarning,
             stacklevel=3,
         )
+
+    # ------------------------------------------------------------------
+    # Connection helpers
+    # ------------------------------------------------------------------
 
     def _normalize_connection_mode(
         self,
         connection_mode: ConnectionMode,
         legacy_localhost_only: Optional[bool],
     ) -> ConnectionMode:
-        """Normalize connection mode input, optionally honoring the legacy alias."""
         normalized = connection_mode.lower()
         if normalized not in {"auto", "localhost_only", "network"}:
             raise ValueError(
                 "Invalid connection_mode. Use 'auto', 'localhost_only', or 'network'."
             )
         resolved = cast(ConnectionMode, normalized)
-
         if legacy_localhost_only is None:
             return resolved
-
         self.logger.warning(
-            "The 'localhost_only' argument is deprecated and will be removed in a "
-            "future release. Please switch to connection_mode."
+            "The 'localhost_only' argument is deprecated; switch to connection_mode."
         )
-
         if resolved != "auto":
-            self.logger.warning(
-                "Both connection_mode=%s and localhost_only=%s were provided. "
-                "connection_mode takes precedence.",
-                resolved,
-                legacy_localhost_only,
-            )
             return resolved
-
         return "localhost_only" if legacy_localhost_only else "network"
 
     def _initialize_client(
         self, requested_mode: ConnectionMode, timeout: float
     ) -> tuple[WSClient, ConnectionMode]:
-        """Create a client according to the requested mode, adding auto fallback."""
         requested_mode = cast(ConnectionMode, requested_mode.lower())
         if requested_mode == "auto":
             try:
-                client = self._connect_single(
-                    host="localhost", port=self.port, timeout=timeout
-                )
+                client = self._connect_single(host="localhost", port=self.port, timeout=timeout)
                 selected: ConnectionMode = "localhost_only"
             except Exception as err:
                 self.logger.info(
-                    "Auto connection: localhost attempt failed (%s). "
-                    "Trying remote host %s.",
+                    "Auto connection: localhost attempt failed (%s). Trying %s.",
                     err,
                     self.host,
                 )
@@ -422,19 +259,15 @@ class Dreambo:
                     )
                 except (ConnectionError, TimeoutError):
                     raise ConnectionError(
-                        "Auto connection: both localhost and remote attempts failed. "
-                        "Make sure a Dreambo daemon is running and accessible."
+                        "Auto connection: both localhost and remote attempts failed."
                     )
-
                 selected = "network"
             self.logger.info("Connection mode selected: %s", selected)
             return client, selected
 
         if requested_mode == "localhost_only":
             try:
-                client = self._connect_single(
-                    host="localhost", port=self.port, timeout=timeout
-                )
+                client = self._connect_single(host="localhost", port=self.port, timeout=timeout)
             except (ConnectionError, TimeoutError):
                 raise ConnectionError(
                     "Could not connect to daemon on localhost. Is the Dreambo daemon running?"
@@ -442,557 +275,203 @@ class Dreambo:
             selected = "localhost_only"
         else:
             try:
-                client = self._connect_single(
-                    host=self.host, port=self.port, timeout=timeout
-                )
+                client = self._connect_single(host=self.host, port=self.port, timeout=timeout)
             except (ConnectionError, TimeoutError):
-                raise ConnectionError(
-                    "Network connection attempt failed. "
-                    "Make sure a Dreambo daemon is running and accessible."
-                )
+                raise ConnectionError("Network connection attempt failed.")
             selected = "network"
 
         self.logger.info("Connection mode selected: %s", selected)
         return client, selected
 
     def _connect_single(self, host: str, port: int, timeout: float) -> WSClient:
-        """Connect once with the requested host/port and guard cleanup."""
         client = WSClient(host, port)
         client.wait_for_connection(timeout=timeout)
         return client
 
+    # ------------------------------------------------------------------
+    # Subsystem commands
+    # ------------------------------------------------------------------
+
+    def set_neck(self, joints: npt.NDArray[np.float64] | List[float]) -> None:
+        """Set the target neck joint positions [yaw, pitch, roll] (radians)."""
+        joints_list = _as_list(joints)
+        assert joints_list is not None and len(joints_list) == 3, (
+            f"Neck joints must have length 3, got {joints_list}."
+        )
+        self.client.send_command(SetNeckCmd(joints=joints_list))
+        self._record({"time": time.time(), "neck": joints_list})
+
+    def set_arm(
+        self,
+        side: Literal["left", "right"],
+        joints: npt.NDArray[np.float64] | List[float],
+    ) -> None:
+        """Set the target joint positions of one arm [theta_a, theta_b] (radians)."""
+        joints_list = _as_list(joints)
+        assert joints_list is not None and len(joints_list) == 2, (
+            f"Arm joints must have length 2, got {joints_list}."
+        )
+        self.client.send_command(SetArmCmd(side=ArmSide(side), joints=joints_list))
+        self._record({"time": time.time(), f"{side}_arm": joints_list})
+
+    def set_nose(self, joints: npt.NDArray[np.float64] | List[float]) -> None:
+        """Set the target nose joint positions [top, left, right] (radians)."""
+        joints_list = _as_list(joints)
+        assert joints_list is not None and len(joints_list) == 3, (
+            f"Nose joints must have length 3, got {joints_list}."
+        )
+        self.client.send_command(SetNoseCmd(joints=joints_list))
+        self._record({"time": time.time(), "nose": joints_list})
+
     def set_target(
         self,
-        head: Optional[npt.NDArray[np.float64]] = None,  # 4x4 pose matrix
-        antennas: Optional[
-            Union[npt.NDArray[np.float64], List[float]]
-        ] = None,  # [right_angle, left_angle] (in rads)
-        body_yaw: Optional[float] = None,  # Body yaw angle in radians
+        neck: Optional[npt.NDArray[np.float64] | List[float]] = None,
+        left_arm: Optional[npt.NDArray[np.float64] | List[float]] = None,
+        right_arm: Optional[npt.NDArray[np.float64] | List[float]] = None,
+        nose: Optional[npt.NDArray[np.float64] | List[float]] = None,
     ) -> None:
-        """Set the target pose of the head and/or the target position of the antennas.
+        """Apply any subset of subsystem targets in a single message."""
+        neck_list = _as_list(neck)
+        left_list = _as_list(left_arm)
+        right_list = _as_list(right_arm)
+        nose_list = _as_list(nose)
 
-        Args:
-            head (Optional[np.ndarray]): 4x4 pose matrix representing the head pose.
-            antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
-            body_yaw (Optional[float]): Body yaw angle in radians.
-
-        Raises:
-            ValueError: If neither head nor antennas are provided, or if the shape of head is not (4, 4), or if antennas is not a 1D array with two elements.
-
-        """
-        if head is None and antennas is None and body_yaw is None:
-            raise ValueError(
-                "At least one of head, antennas or body_yaw must be provided."
-            )
-
-        if head is not None and not head.shape == (4, 4):
-            raise ValueError(f"Head pose must be a 4x4 matrix, got shape {head.shape}.")
-
-        if antennas is not None and not len(antennas) == 2:
-            raise ValueError(
-                "Antennas must be a list or 1D np array with two elements."
-            )
-
-        if body_yaw is not None and not isinstance(body_yaw, (int, float)):
-            raise ValueError("body_yaw must be a float.")
+        if all(v is None for v in (neck_list, left_list, right_list, nose_list)):
+            raise ValueError("At least one of neck, left_arm, right_arm or nose must be provided.")
 
         self.client.send_command(
             SetFullTargetCmd(
-                head=head.flatten().tolist() if head is not None else None,
-                antennas=list(antennas) if antennas is not None else None,
-                body_yaw=body_yaw,
+                neck=neck_list,
+                left_arm=left_list,
+                right_arm=right_list,
+                nose=nose_list,
             )
         )
 
-        self._last_head_pose = head
-
-        record: Dict[str, float | List[float] | List[List[float]]] = {
-            "time": time.time(),
-            "body_yaw": body_yaw if body_yaw is not None else 0.0,
-        }
-        if head is not None:
-            record["head"] = head.tolist()
-        if antennas is not None:
-            record["antennas"] = list(antennas)
-        if body_yaw is not None:
-            record["body_yaw"] = body_yaw
-        self._set_record_data(record)
+        record: Dict[str, Any] = {"time": time.time()}
+        if neck_list is not None:
+            record["neck"] = neck_list
+        if left_list is not None:
+            record["left_arm"] = left_list
+        if right_list is not None:
+            record["right_arm"] = right_list
+        if nose_list is not None:
+            record["nose"] = nose_list
+        self._record(record)
 
     def goto_target(
         self,
-        head: Optional[npt.NDArray[np.float64]] = None,  # 4x4 pose matrix
-        antennas: Optional[
-            Union[npt.NDArray[np.float64], List[float]]
-        ] = None,  # [right_angle, left_angle] (in rads)
-        duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
-        method: InterpolationTechnique = InterpolationTechnique.MIN_JERK,  # can be "linear", "minjerk", "ease_in_out" or "cartoon", default is "minjerk")
-        body_yaw: float | None = 0.0,  # Body yaw angle in radians
+        neck: Optional[npt.NDArray[np.float64] | List[float]] = None,
+        left_arm: Optional[npt.NDArray[np.float64] | List[float]] = None,
+        right_arm: Optional[npt.NDArray[np.float64] | List[float]] = None,
+        nose: Optional[npt.NDArray[np.float64] | List[float]] = None,
+        duration: float = 0.5,
+        method: InterpolationTechnique = InterpolationTechnique.MIN_JERK,
     ) -> None:
-        """Go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
-
-        Args:
-            head (Optional[np.ndarray]): 4x4 pose matrix representing the target head pose.
-            antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
-            duration (float): Duration of the movement in seconds.
-            method (InterpolationTechnique): Interpolation method to use ("linear", "minjerk", "ease_in_out", "cartoon"). Default is "minjerk".
-            body_yaw (float | None): Body yaw angle in radians. Use None to keep the current yaw.
-
-        Raises:
-            ValueError: If neither head nor antennas are provided, or if duration is not positive.
-
-        """
-        if head is None and antennas is None and body_yaw is None:
-            raise ValueError(
-                "At least one of head, antennas or body_yaw must be provided."
-            )
-
+        """Smoothly interpolate any subset of subsystems to the given targets."""
+        if all(v is None for v in (neck, left_arm, right_arm, nose)):
+            raise ValueError("At least one of neck, left_arm, right_arm or nose must be provided.")
         if duration <= 0.0:
-            raise ValueError(
-                "Duration must be positive and non-zero. Use set_target() for immediate position setting."
-            )
+            raise ValueError("Duration must be positive. Use set_target() for immediate moves.")
 
         req = GotoTaskRequest(
-            head=(
-                np.array(head, dtype=np.float64).flatten().tolist()
-                if head is not None
-                else None
-            ),
-            antennas=(
-                np.array(antennas, dtype=np.float64).flatten().tolist()
-                if antennas is not None
-                else None
-            ),
+            neck=_as_list(neck),
+            left_arm=_as_list(left_arm),
+            right_arm=_as_list(right_arm),
+            nose=_as_list(nose),
             duration=duration,
             method=method,
-            body_yaw=body_yaw,
         )
-
         task_uid = self.client.send_task_request(req)
         self.client.wait_for_task_completion(task_uid, timeout=duration + 1.0)
 
+    # ------------------------------------------------------------------
+    # Wake / sleep — delegated to the daemon's named poses
+    # ------------------------------------------------------------------
+
     def wake_up(self) -> None:
-        """Wake up the robot - go to the initial head position and play the wake up emote and sound."""
-        self.goto_target(INIT_HEAD_POSE, antennas=INIT_ANTENNAS_JOINT_POSITIONS, duration=2)
-        time.sleep(0.1)
-
-        # Toudoum
-        self.media.play_sound("wake_up.wav")
-
-        # Roll 20° to the left
-        pose = INIT_HEAD_POSE.copy()
-        pose[:3, :3] = R.from_euler("xyz", [20, 0, 0], degrees=True).as_matrix()
-        self.goto_target(pose, duration=0.2)
-
-        # Go back to the initial position
-        self.goto_target(INIT_HEAD_POSE, duration=0.2)
+        """Run the daemon's 'wake' named pose + wake_up.wav."""
+        from dreambo_torso.io.protocol import WakeUpCmd
+        self.client.send_command(WakeUpCmd())
 
     def goto_sleep(self) -> None:
-        """Put the robot to sleep by moving the head and antennas to a predefined sleep position."""
-        # Check if we are too far from the initial position
-        # Move to the initial position if necessary
-        current_positions, _ = self.get_current_joint_positions()
-        # init_positions = self.head_kinematics.ik(INIT_HEAD_POSE)
-        # Todo : get init position from the daemon?
-        init_positions = [
-            6.959852054044218e-07,
-            0.5251518455536499,
-            -0.668710345667336,
-            0.6067086443974802,
-            -0.606711497194891,
-            0.6687148024583701,
-            -0.5251586523105128,
-        ]
-        dist = np.linalg.norm(np.array(current_positions) - np.array(init_positions))
-        if dist > 0.2:
-            self.goto_target(INIT_HEAD_POSE, antennas=INIT_ANTENNAS_JOINT_POSITIONS, duration=1)
-            time.sleep(0.2)
-
-        # Pfiou
-        self.media.play_sound("go_sleep.wav")
-
-        # # Move to the sleep position
-        self.goto_target(
-            SLEEP_HEAD_POSE, antennas=SLEEP_ANTENNAS_JOINT_POSITIONS, duration=2
-        )
-
-        self._last_head_pose = SLEEP_HEAD_POSE
-        time.sleep(2)
-
-    def look_at_image(
-        self, u: int, v: int, duration: float = 1.0, perform_movement: bool = True
-    ) -> npt.NDArray[np.float64]:
-        """Make the robot head look at a point defined by a pixel position (u,v).
-
-        # TODO image of Dreambo coordinate system
-
-        Args:
-            u (int): Horizontal coordinate in image frame.
-            v (int): Vertical coordinate in image frame.
-            duration (float): Duration of the movement in seconds. If 0, the head will snap to the position immediately.
-            perform_movement (bool): If True, perform the movement. If False, only calculate and return the pose.
-
-        Returns:
-            np.ndarray: The calculated head pose as a 4x4 matrix.
-
-        Raises:
-            ValueError: If duration is negative.
-
-        """
-        if self.media_manager.camera is None:
-            raise RuntimeError("Camera is not initialized.")
-
-        # TODO this is false for the raspicam for now
-        assert 0 < u < self.media_manager.camera.resolution[0], (
-            f"u must be in [0, {self.media_manager.camera.resolution[0]}], got {u}."
-        )
-        assert 0 < v < self.media_manager.camera.resolution[1], (
-            f"v must be in [0, {self.media_manager.camera.resolution[1]}], got {v}."
-        )
-
-        if duration < 0:
-            raise ValueError("Duration can't be negative.")
-
-        if self.media.camera is None or self.media.camera.camera_specs is None:
-            raise RuntimeError("Camera specs not set.")
-
-        x_n, y_n = undistort_points(
-            u,
-            v,
-            self.media.camera.K,  # type: ignore
-            self.media.camera.D,  # type: ignore
-        )
-
-        ray_cam = np.array([x_n, y_n, 1.0])
-        ray_cam /= np.linalg.norm(ray_cam)
-
-        T_world_head = self.get_current_head_pose()
-        T_world_cam = T_world_head @ self.T_head_cam
-
-        R_wc = T_world_cam[:3, :3]
-        t_wc = T_world_cam[:3, 3]
-
-        ray_world = R_wc @ ray_cam
-
-        P_world = t_wc + ray_world
-
-        return self.look_at_world(
-            x=P_world[0],
-            y=P_world[1],
-            z=P_world[2],
-            duration=duration,
-            perform_movement=perform_movement,
-        )
-
-    def look_at_world(
-        self,
-        x: float,
-        y: float,
-        z: float,
-        duration: float = 1.0,
-        perform_movement: bool = True,
-    ) -> npt.NDArray[np.float64]:
-        """Look at a specific point in 3D space in Dreambo's reference frame.
-
-        TODO include image of Dreambo coordinate system
-
-        Args:
-            x (float): X coordinate in meters.
-            y (float): Y coordinate in meters.
-            z (float): Z coordinate in meters.
-            duration (float): Duration of the movement in seconds. If 0, the head will snap to the position immediately.
-            perform_movement (bool): If True, perform the movement. If False, only calculate and return the pose.
-
-        Returns:
-            np.ndarray: The calculated head pose as a 4x4 matrix.
-
-        Raises:
-            ValueError: If duration is negative.
-
-        """
-        if duration < 0:
-            raise ValueError("Duration can't be negative.")
-
-        # Head is at the origin, so vector from head to target position is directly the target position
-        # TODO FIX : Actually, the head frame is not the origin frame wrt the kinematics. Close enough for now.
-        target_position = np.array([x, y, z])
-        target_vector = target_position / np.linalg.norm(
-            target_position
-        )  # normalize the vector
-
-        # head_pointing straight vector
-        straight_head_vector = np.array([1, 0, 0])
-
-        # Calculate the rotation needed to align the head with the target vector
-        v1 = straight_head_vector
-        v2 = target_vector
-        axis = np.cross(v1, v2)
-        axis_norm = np.linalg.norm(axis)
-        if axis_norm < 1e-8:
-            # Vectors are (almost) parallel
-            if np.dot(v1, v2) > 0:
-                rot_mat = np.eye(3)
-            else:
-                # Opposite direction: rotate 180° around any perpendicular axis
-                perp = np.array([0, 1, 0]) if abs(v1[0]) < 0.9 else np.array([0, 0, 1])
-                axis = np.cross(v1, perp)
-                axis /= np.linalg.norm(axis)
-                rot_mat = R.from_rotvec(np.pi * axis).as_matrix()
-        else:
-            axis = axis / axis_norm
-            angle = np.arccos(np.clip(np.dot(v1, v2), -1.0, 1.0))
-            rotation_vector = angle * axis
-            rot_mat = R.from_rotvec(rotation_vector).as_matrix()
-
-        target_head_pose = np.eye(4)
-        target_head_pose[:3, :3] = rot_mat
-
-        # If perform_movement is True, execute the movement
-        if perform_movement:
-            # If duration is specified, use the goto_target method to move smoothly
-            # Otherwise, set the position immediately
-            if duration > 0:
-                self.goto_target(target_head_pose, duration=duration)
-            else:
-                self.set_target(target_head_pose)
-
-        return target_head_pose
-
-    def _goto_joint_positions(
-        self,
-        head_joint_positions: Optional[
-            List[float]
-        ] = None,  # [yaw, stewart_platform x 6] length 7
-        antennas_joint_positions: Optional[
-            List[float]
-        ] = None,  # [right_angle, left_angle] length 2
-        duration: float = 0.5,  # Duration in seconds for the movement
-    ) -> None:
-        """Go to a target head joint positions and/or antennas joint positions using joint space interpolation, in "duration" seconds.
-
-        [Internal] Go to a target head joint positions and/or antennas joint positions using joint space interpolation, in "duration" seconds.
-
-        Args:
-            head_joint_positions (Optional[List[float]]): List of head joint positions in radians (length 7).
-            antennas_joint_positions (Optional[List[float]]): List of antennas joint positions in radians (length 2).
-            duration (float): Duration of the movement in seconds. Default is 0.5 seconds.
-
-        Raises:
-            ValueError: If neither head_joint_positions nor antennas_joint_positions are provided, or if duration is not positive.
-
-        """
-        if duration <= 0.0:
-            raise ValueError(
-                "Duration must be positive and non-zero. Use set_target() for immediate position setting."
-            )
-
-        cur_head, cur_antennas = self.get_current_joint_positions()
-        current = cur_head + cur_antennas
-
-        target = []
-        if head_joint_positions is not None:
-            target.extend(head_joint_positions)
-        else:
-            target.extend(cur_head)
-        if antennas_joint_positions is not None:
-            target.extend(antennas_joint_positions)
-        else:
-            target.extend(cur_antennas)
-
-        traj = minimum_jerk(np.array(current), np.array(target), duration)
-
-        t0 = time.time()
-        while time.time() - t0 < duration:
-            t = time.time() - t0
-            angles = traj(t)
-
-            head_joint = angles[:7]  # First 7 angles for the head
-            antennas_joint = angles[7:]
-
-            self._set_joint_positions(list(head_joint), list(antennas_joint))
-            time.sleep(0.01)
-
-    def get_current_joint_positions(self) -> tuple[list[float], list[float]]:
-        """Get the current joint positions of the head and antennas.
-
-        Get the current joint positions of the head and antennas (in rad)
-
-        Returns:
-            tuple: A tuple containing two lists:
-                - List of head joint positions (rad) (length 7).
-                - List of antennas joint positions (rad) (length 2).
-
-        """
-        return self.client.get_current_joints()
-
-    def get_present_antenna_joint_positions(self) -> list[float]:
-        """Get the present joint positions of the antennas.
-
-        Get the present joint positions of the antennas (in rad)
-
-        Returns:
-            list: A list of antennas joint positions (rad) (length 2).
-
-        """
-        return self.get_current_joint_positions()[1]
-
-    def get_current_head_pose(self) -> npt.NDArray[np.float64]:
-        """Get the current head pose as a 4x4 matrix.
-
-        Get the current head pose as a 4x4 matrix.
-
-        Returns:
-            np.ndarray: A 4x4 matrix representing the current head pose.
-
-        """
-        return self.client.get_current_head_pose()
-
-    def _set_joint_positions(
-        self,
-        head_joint_positions: list[float] | None = None,
-        antennas_joint_positions: list[float] | None = None,
-    ) -> None:
-        """Set the joint positions of the head and/or antennas.
-
-        [Internal] Set the joint positions of the head and/or antennas.
-
-        Args:
-            head_joint_positions (Optional[List[float]]): List of head joint positions in radians (length 7).
-            antennas_joint_positions (Optional[List[float]]): List of antennas joint positions in radians (length 2).
-            record (Optional[Dict]): If provided, the command will be logged with the given record data.
-
-        """
-        if head_joint_positions is not None:
-            assert len(head_joint_positions) == 7, (
-                f"Head joint positions must have length 7, got {head_joint_positions}."
-            )
-            self.client.send_command(
-                SetHeadJointsCmd(joints=list(head_joint_positions))
-            )
-
-        if antennas_joint_positions is not None:
-            assert len(antennas_joint_positions) == 2, "Antennas must have length 2."
-            self.client.send_command(
-                SetAntennasCmd(antennas=list(antennas_joint_positions))
-            )
-
-        if head_joint_positions is None and antennas_joint_positions is None:
-            raise ValueError(
-                "At least one of head_joint_positions or antennas must be provided."
-            )
-
-    def set_target_head_pose(self, pose: npt.NDArray[np.float64]) -> None:
-        """Set the head pose to a specific 4x4 matrix.
-
-        Args:
-            pose (np.ndarray): A 4x4 matrix representing the desired head pose.
-            body_yaw (float): The yaw angle of the body, used to adjust the head pose.
-
-        Raises:
-            ValueError: If the shape of the pose is not (4, 4).
-
-        """
-        if pose is not None:
-            assert pose.shape == (
-                4,
-                4,
-            ), f"Head pose should be a 4x4 matrix, got {pose.shape}."
-            self.client.send_command(SetTargetCmd(head=pose.flatten().tolist()))
-        else:
-            raise ValueError("Pose must be provided as a 4x4 matrix.")
-
-    def set_target_antenna_joint_positions(self, antennas: List[float]) -> None:
-        """Set the target joint positions of the antennas."""
-        self.client.send_command(SetAntennasCmd(antennas=antennas))
-
-    def set_target_body_yaw(self, body_yaw: float) -> None:
-        """Set the target body yaw.
-
-        Args:
-            body_yaw (float): The yaw angle of the body in radians.
-
-        """
-        self.client.send_command(SetBodyYawCmd(body_yaw=body_yaw))
+        """Run the daemon's 'sleep' named pose + go_sleep.wav."""
+        from dreambo_torso.io.protocol import GotoSleepCmd
+        self.client.send_command(GotoSleepCmd())
+
+    # ------------------------------------------------------------------
+    # State queries
+    # ------------------------------------------------------------------
+
+    def get_current_joints(self) -> Dict[str, List[float]]:
+        """Return a snapshot of every subsystem's present joint positions."""
+        msg = self.client.get_current_joints()
+        return {
+            "neck": list(msg.neck),
+            "left_arm": list(msg.left_arm),
+            "right_arm": list(msg.right_arm),
+            "nose": list(msg.nose),
+        }
+
+    def get_current_neck_joints(self) -> List[float]:
+        """Return the latest neck joint positions [yaw, pitch, roll]."""
+        return list(self.client.get_current_joints().neck)
+
+    def get_current_left_arm_joints(self) -> List[float]:
+        """Return the latest left-arm joint positions [theta_a, theta_b]."""
+        return list(self.client.get_current_joints().left_arm)
+
+    def get_current_right_arm_joints(self) -> List[float]:
+        """Return the latest right-arm joint positions [theta_a, theta_b]."""
+        return list(self.client.get_current_joints().right_arm)
+
+    def get_current_nose_joints(self) -> List[float]:
+        """Return the latest nose joint positions [top, left, right]."""
+        return list(self.client.get_current_joints().nose)
+
+    # ------------------------------------------------------------------
+    # Recording
+    # ------------------------------------------------------------------
 
     def start_recording(self) -> None:
-        """Start recording data."""
+        """Begin a recording on the daemon."""
         self.client.send_command(StartRecordingCmd())
         self.is_recording = True
 
     def stop_recording(
         self,
-    ) -> Optional[List[Dict[str, float | List[float] | List[List[float]]]]]:
-        """Stop recording data and return the recorded data."""
+    ) -> Optional[List[Dict[str, Any]]]:
+        """End the recording and return the buffered data, if any."""
         self.client.send_command(StopRecordingCmd())
         self.is_recording = False
         if not self.client.wait_for_recorded_data(timeout=5):
             raise RuntimeError("Daemon did not provide recorded data in time!")
-        recorded_data = self.client.get_recorded_data(wait=False)
+        return self.client.get_recorded_data(wait=False)
 
-        return recorded_data
-
-    def _set_record_data(
-        self, record: Dict[str, float | List[float] | List[List[float]]]
-    ) -> None:
-        """Set the record data to be logged by the backend.
-
-        Args:
-            record (Dict): The record data to be logged.
-
-        """
-        if not isinstance(record, dict):
-            raise ValueError("Record must be a dictionary.")
-
-        # Send the record data to the backend
+    def _record(self, record: Dict[str, Any]) -> None:
+        """Append a record to the in-flight recording buffer (no-op when idle)."""
+        if not self.is_recording:
+            return
         self.client.send_command(AppendRecordCmd(record=record))
 
+    # ------------------------------------------------------------------
+    # Motor torque
+    # ------------------------------------------------------------------
+
     def enable_motors(self, ids: List[str] | None = None) -> None:
-        """Enable the motors.
-
-        Args:
-            ids (List[str] | None): List of motor names to enable. If None, all motors will be enabled.
-                Valid names match `src/reachy_mini/assets/config/hardware_config.yaml`:
-                `body_rotation`, `stewart_1` … `stewart_6`, `right_antenna`, `left_antenna`.
-
-        """
-        self._set_torque(True, ids=ids)
+        """Enable motor torque (optionally only on specific motor names)."""
+        self.client.send_command(SetTorqueCmd(on=True, ids=ids))
 
     def disable_motors(self, ids: List[str] | None = None) -> None:
-        """Disable the motors.
+        """Disable motor torque (optionally only on specific motor names)."""
+        self.client.send_command(SetTorqueCmd(on=False, ids=ids))
 
-        Args:
-            ids (List[str] | None): List of motor names to disable. If None, all motors will be disabled.
-                Valid names match `src/reachy_mini/assets/config/hardware_config.yaml`:
-                `body_rotation`, `stewart_1` … `stewart_6`, `right_antenna`, `left_antenna`.
-
-        """
-        self._set_torque(False, ids=ids)
-
-    def _set_torque(self, on: bool, ids: List[str] | None = None) -> None:
-        self.client.send_command(SetTorqueCmd(on=on, ids=ids))
-
-    def enable_gravity_compensation(self) -> None:
-        """Enable gravity compensation for the head motors."""
-        self.client.send_command(SetGravityCompensationCmd(enabled=True))
-
-    def disable_gravity_compensation(self) -> None:
-        """Disable gravity compensation for the head motors."""
-        self.client.send_command(SetGravityCompensationCmd(enabled=False))
-
-    def set_automatic_body_yaw(self, enabled: bool) -> None:
-        """Enable or disable automatic body yaw.
-
-        Args:
-            enabled (bool): Whether automatic body yaw is enabled.
-
-        """
-        self.client.send_command(SetAutomaticBodyYawCmd(enabled=enabled))
+    # ------------------------------------------------------------------
+    # Move playback
+    # ------------------------------------------------------------------
 
     def cancel_move(self) -> None:
-        """Cancel the currently playing move.
-
-        This will cause any running play_move or async_play_move to stop
-        at the next iteration of the playback loop. Audio is also stopped.
-        """
+        """Cancel the currently playing :meth:`play_move`."""
         self._move_cancelled = True
         self.media_manager.stop_playing()
         self.logger.info("Move cancellation requested")
@@ -1004,26 +483,17 @@ class Dreambo:
         initial_goto_duration: float = 0.0,
         sound: bool = True,
     ) -> None:
-        """Asynchronously play a Move.
-
-        Args:
-            move (Move): The Move object to be played.
-            play_frequency (float): The frequency at which to evaluate the move (in Hz).
-            initial_goto_duration (float): Duration for the initial goto to the starting position of the move (in seconds). If 0, no initial goto is performed.
-            sound (bool): If True, play the sound associated with the move (if any).
-
-        """
+        """Asynchronously play a :class:`Move` (per-subsystem joint trajectories)."""
         self._move_cancelled = False
 
         if initial_goto_duration > 0.0:
-            start_head_pose, start_antennas_positions, start_body_yaw = move.evaluate(
-                0.0
-            )
+            start_targets: JointTargets = move.evaluate(0.0)
             self.goto_target(
-                head=start_head_pose,
-                antennas=start_antennas_positions,
+                neck=start_targets.neck,
+                left_arm=start_targets.left_arm,
+                right_arm=start_targets.right_arm,
+                nose=start_targets.nose,
                 duration=initial_goto_duration,
-                body_yaw=start_body_yaw,
             )
 
         sleep_period = 1.0 / play_frequency
@@ -1038,14 +508,16 @@ class Dreambo:
                 break
 
             t = min(time.time() - t0, move.duration - 1e-2)
+            targets = move.evaluate(t)
 
-            head, antennas, body_yaw = move.evaluate(t)
-            if head is not None:
-                self.set_target_head_pose(head)
-            if body_yaw is not None:
-                self.set_target_body_yaw(body_yaw)
-            if antennas is not None:
-                self.set_target_antenna_joint_positions(list(antennas))
+            if targets.neck is not None:
+                self.set_neck(targets.neck)
+            if targets.left_arm is not None:
+                self.set_arm("left", targets.left_arm)
+            if targets.right_arm is not None:
+                self.set_arm("right", targets.right_arm)
+            if targets.nose is not None:
+                self.set_nose(targets.nose)
 
             elapsed = time.time() - t0 - t
             if elapsed < sleep_period:

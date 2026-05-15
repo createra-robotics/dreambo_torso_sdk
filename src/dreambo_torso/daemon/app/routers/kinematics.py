@@ -30,13 +30,8 @@ STL_ASSETS_DIR = (
 async def get_kinematics_info(
     backend: Backend = Depends(get_backend),
 ) -> dict[str, Any]:
-    """Get the current information of the kinematics."""
-    return {
-        "info": {
-            "engine": backend.kinematics_engine,
-            "collision check": backend.check_collision,
-        }
-    }
+    """Return placeholder kinematics info while the new Rust crate is wired in."""
+    return {"info": {"engine": "pending", "collision_check": False}}
 
 
 @router.get("/urdf")

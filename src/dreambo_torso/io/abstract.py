@@ -10,14 +10,12 @@ from threading import Event
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-import numpy as np
-import numpy.typing as npt
-
 from dreambo_torso.io.protocol import (
     AnyCommand,
     AnyTaskRequest,
     DaemonStatus,
     ImuDataMsg,
+    JointPositionsMsg,
 )
 
 
@@ -64,13 +62,8 @@ class AbstractClient(ABC):
         pass
 
     @abstractmethod
-    def get_current_joints(self) -> tuple[list[float], list[float]]:
-        """Get the current joint positions."""
-        pass
-
-    @abstractmethod
-    def get_current_head_pose(self) -> npt.NDArray[np.float64]:
-        """Get the current head pose as a 4x4 matrix."""
+    def get_current_joints(self) -> JointPositionsMsg:
+        """Get the latest joint positions for every subsystem."""
         pass
 
     @abstractmethod

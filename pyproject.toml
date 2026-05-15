@@ -22,7 +22,7 @@ dependencies = [
     "starlette<1.0.0",   #Fix: for starlette >= 1.0.0, we need to implement TemplateResponse(request, name, context)
     "pyserial",
     "huggingface-hub==1.3.0",
-    "dreambo-torso-kinematics>=1.0.1",
+    "dreambo-torso-kinematics>=2.0.0",
     "asgiref",
     "aiohttp",
     "log-throttling==0.0.3",

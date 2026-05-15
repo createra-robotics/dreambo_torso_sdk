@@ -20,7 +20,7 @@ class MotorStatus(BaseModel):
     """Represents the status of the motors.
 
     Exposes
-    - mode: The current motor control mode (enabled, disabled, gravity_compensation).
+    - mode: The current motor control mode (enabled, disabled).
     """
 
     mode: MotorControlMode

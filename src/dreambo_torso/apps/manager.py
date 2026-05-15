@@ -303,20 +303,11 @@ class AppManager:
                 self.daemon.backend.enable_motors()
 
             try:
-                from dreambo_torso.dreambo_torso import (
-                    INIT_ANTENNAS_JOINT_POSITIONS,
-                    INIT_HEAD_POSE,
-                )
-
-                self.logger.getChild("runner").info("Returning robot to zero position")
-                await self.daemon.backend.goto_target(
-                    head=INIT_HEAD_POSE,
-                    antennas=np.array(INIT_ANTENNAS_JOINT_POSITIONS),
-                    duration=1.0,
-                )
+                self.logger.getChild("runner").info("Returning robot to init pose")
+                await self.daemon.backend._goto_named_pose("init", duration=1.0)
             except Exception as e:
                 self.logger.getChild("runner").warning(
-                    f"Could not return to zero position: {e}"
+                    f"Could not return to init pose: {e}"
                 )
 
         self.current_app = None

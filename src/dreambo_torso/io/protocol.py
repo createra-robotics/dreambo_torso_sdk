@@ -2,16 +2,21 @@
 
 All messages use a {"type": "...", ...payload} envelope.
 
+Subsystems on the new Dreambo torso:
+    - neck:      3-DOF serial gimbal (yaw, pitch, roll), DM motors over CAN.
+    - left_arm:  2-DOF spherical 5-bar (theta_a, theta_b), Feetech servos.
+    - right_arm: 2-DOF spherical 5-bar (theta_a, theta_b), Feetech servos.
+    - nose:      3 independent Feetech servos (top, left, right).
+
 Client->Server command types:
-    set_target, set_head_joints, set_body_yaw, set_antennas, set_full_target,
-    goto_target, wake_up, goto_sleep, play_sound,
+    set_neck, set_arm, set_nose, set_full_target, goto_target,
+    wake_up, goto_sleep, play_sound,
     set_motor_mode, set_torque, get_motor_mode,
-    set_gravity_compensation, set_automatic_body_yaw,
-    get_state, get_version, start_recording, stop_recording, append_record
+    get_state, get_version, start_recording, stop_recording, append_record,
+    set_volume, get_volume, set_microphone_volume, get_microphone_volume
 
 Server->Client message types:
-    joint_positions, head_pose, imu_data, recorded_data,
-    daemon_status, task_progress
+    joint_positions, imu_data, recorded_data, daemon_status, task_progress
 """
 
 from datetime import datetime
@@ -33,7 +38,13 @@ class MotorControlMode(str, Enum):
 
     Enabled = "enabled"
     Disabled = "disabled"
-    GravityCompensation = "gravity_compensation"
+
+
+class ArmSide(str, Enum):
+    """Which arm a command targets."""
+
+    Left = "left"
+    Right = "right"
 
 
 class DaemonState(str, Enum):
@@ -75,7 +86,7 @@ class MockupSimBackendStatus(BaseModel):
 
 
 class DaemonStatus(BaseModel):
-    """Status of the Reachy Mini daemon."""
+    """Status of the Dreambo torso daemon."""
 
     type: Literal["daemon_status"] = "daemon_status"
     robot_name: str
@@ -100,66 +111,62 @@ class DaemonStatus(BaseModel):
 # ------------------------------------------------------------------
 
 
-class SetTargetCmd(BaseModel):
-    """Set the target head pose (4x4 matrix, flattened)."""
+class SetNeckCmd(BaseModel):
+    """Set the target neck joint positions [yaw, pitch, roll] (radians)."""
 
-    type: Literal["set_target"] = "set_target"
-    head: list[float]
-
-
-class SetHeadJointsCmd(BaseModel):
-    """Set the target head joint positions (7 values)."""
-
-    type: Literal["set_head_joints"] = "set_head_joints"
-    joints: list[float]
+    type: Literal["set_neck"] = "set_neck"
+    joints: list[float] = Field(..., min_length=3, max_length=3)
 
 
-class SetBodyYawCmd(BaseModel):
-    """Set the target body yaw angle (radians)."""
+class SetArmCmd(BaseModel):
+    """Set the target joint positions of one arm [theta_a, theta_b] (radians)."""
 
-    type: Literal["set_body_yaw"] = "set_body_yaw"
-    body_yaw: float
+    type: Literal["set_arm"] = "set_arm"
+    side: ArmSide
+    joints: list[float] = Field(..., min_length=2, max_length=2)
 
 
-class SetAntennasCmd(BaseModel):
-    """Set the target antenna positions [right, left] (radians)."""
+class SetNoseCmd(BaseModel):
+    """Set the target nose joint positions [top, left, right] (radians)."""
 
-    type: Literal["set_antennas"] = "set_antennas"
-    antennas: list[float]
+    type: Literal["set_nose"] = "set_nose"
+    joints: list[float] = Field(..., min_length=3, max_length=3)
 
 
 class SetFullTargetCmd(BaseModel):
-    """Set head, antennas, and body_yaw in a single message.
+    """Set any subset of subsystems in a single message.
 
-    All fields are optional so callers can send any subset.
-    This avoids the overhead of three separate WebSocket messages
-    when updating head + antennas + body_yaw together.
+    Each subsystem field is optional; only those that are non-None are
+    applied. Avoids the overhead of multiple WebSocket round-trips when
+    coordinating several subsystems.
     """
 
     type: Literal["set_full_target"] = "set_full_target"
-    head: list[float] | None = None
-    antennas: list[float] | None = None
-    body_yaw: float | None = None
+    neck: list[float] | None = None        # [yaw, pitch, roll]
+    left_arm: list[float] | None = None    # [theta_a, theta_b]
+    right_arm: list[float] | None = None   # [theta_a, theta_b]
+    nose: list[float] | None = None        # [top, left, right]
 
 
 class GotoTargetCmd(BaseModel):
-    """Smooth interpolated goto with optional head, antennas, and body yaw."""
+    """Smooth interpolated goto for any subset of subsystems."""
 
     type: Literal["goto_target"] = "goto_target"
-    head: list[float] | None = None
-    antennas: list[float] | None = None
+    neck: list[float] | None = None
+    left_arm: list[float] | None = None
+    right_arm: list[float] | None = None
+    nose: list[float] | None = None
     duration: float = 0.5
-    body_yaw: float | None = None
 
 
 class WakeUpCmd(BaseModel):
-    """Wake up the robot."""
+    """Wake up the robot (run the named 'wake' pose + audio)."""
 
     type: Literal["wake_up"] = "wake_up"
 
 
 class GotoSleepCmd(BaseModel):
-    """Put the robot to sleep."""
+    """Put the robot to sleep (run the named 'sleep' pose + audio)."""
 
     type: Literal["goto_sleep"] = "goto_sleep"
 
@@ -172,7 +179,7 @@ class PlaySoundCmd(BaseModel):
 
 
 class SetMotorModeCmd(BaseModel):
-    """Set the motor control mode (enabled, disabled, gravity_compensation)."""
+    """Set the motor control mode (enabled, disabled)."""
 
     type: Literal["set_motor_mode"] = "set_motor_mode"
     mode: str
@@ -190,20 +197,6 @@ class GetMotorModeCmd(BaseModel):
     """Query the current motor control mode."""
 
     type: Literal["get_motor_mode"] = "get_motor_mode"
-
-
-class SetGravityCompensationCmd(BaseModel):
-    """Enable or disable gravity compensation mode."""
-
-    type: Literal["set_gravity_compensation"] = "set_gravity_compensation"
-    enabled: bool
-
-
-class SetAutomaticBodyYawCmd(BaseModel):
-    """Enable or disable automatic body yaw."""
-
-    type: Literal["set_automatic_body_yaw"] = "set_automatic_body_yaw"
-    enabled: bool
 
 
 class GetStateCmd(BaseModel):
@@ -267,10 +260,9 @@ class GetMicrophoneVolumeCmd(BaseModel):
 
 
 AnyCommand = Annotated[
-    SetTargetCmd
-    | SetHeadJointsCmd
-    | SetBodyYawCmd
-    | SetAntennasCmd
+    SetNeckCmd
+    | SetArmCmd
+    | SetNoseCmd
     | SetFullTargetCmd
     | GotoTargetCmd
     | WakeUpCmd
@@ -279,8 +271,6 @@ AnyCommand = Annotated[
     | SetMotorModeCmd
     | SetTorqueCmd
     | GetMotorModeCmd
-    | SetGravityCompensationCmd
-    | SetAutomaticBodyYawCmd
     | GetStateCmd
     | GetVersionCmd
     | StartRecordingCmd
@@ -302,18 +292,17 @@ command_adapter: TypeAdapter[AnyCommand] = TypeAdapter(AnyCommand)
 
 
 class JointPositionsMsg(BaseModel):
-    """Head and antenna joint positions (published at 50 Hz)."""
+    """Per-subsystem joint positions (published at 50 Hz).
+
+    Channels are emitted unconditionally; subsystems whose hardware is
+    absent or torqued off report their last-known position.
+    """
 
     type: Literal["joint_positions"] = "joint_positions"
-    head_joint_positions: list[float]
-    antennas_joint_positions: list[float]
-
-
-class HeadPoseMsg(BaseModel):
-    """Head pose as a 4x4 transformation matrix (published at 50 Hz)."""
-
-    type: Literal["head_pose"] = "head_pose"
-    head_pose: list[list[float]]
+    neck: list[float]        # [yaw, pitch, roll]
+    left_arm: list[float]    # [theta_a, theta_b]
+    right_arm: list[float]   # [theta_a, theta_b]
+    nose: list[float]        # [top, left, right]
 
 
 class ImuDataMsg(BaseModel):
@@ -339,13 +328,14 @@ class RecordedDataMsg(BaseModel):
 
 
 class GotoTaskRequest(BaseModel):
-    """A goto target task."""
+    """A goto target task (any subset of subsystems)."""
 
-    head: list[float] | None  # 4x4 flatten pose matrix
-    antennas: list[float] | None  # [right_angle, left_angle] (in rads)
+    neck: list[float] | None = None
+    left_arm: list[float] | None = None
+    right_arm: list[float] | None = None
+    nose: list[float] | None = None
     duration: float
     method: InterpolationTechnique
-    body_yaw: float | None
 
 
 class PlayMoveTaskRequest(BaseModel):
@@ -382,7 +372,6 @@ class TaskProgress(BaseModel):
 
 AnyServerMsg = Annotated[
     JointPositionsMsg
-    | HeadPoseMsg
     | ImuDataMsg
     | RecordedDataMsg
     | DaemonStatus

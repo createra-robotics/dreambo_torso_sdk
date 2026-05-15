@@ -232,8 +232,6 @@ class Daemon:
         scene: str = "empty",
         localhost_only: bool = True,
         wake_up_on_start: bool = True,
-        check_collision: bool = False,
-        kinematics_engine: str = "AnalyticalKinematics",
         headless: bool = False,
         use_audio: bool = True,  # kept for backward compat, overridden by no_media
         hardware_config_filepath: str | None = None,
@@ -247,8 +245,6 @@ class Daemon:
             scene (str): Name of the scene to load in simulation mode ("empty" or "minimal"). Defaults to "empty".
             localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to True.
             wake_up_on_start (bool): If True, wake up Dreambo on start. Defaults to True.
-            check_collision (bool): If True, enable collision checking. Defaults to False.
-            kinematics_engine (str): Kinematics engine to use. Defaults to "AnalyticalKinematics".
             headless (bool): If True, run Mujoco in headless mode (no GUI). Defaults to False.
             use_audio (bool): If True, enable audio. Defaults to True.
             hardware_config_filepath (str | None): Path to the hardware configuration YAML file. Defaults to None.
@@ -262,7 +258,10 @@ class Daemon:
             return self._status.state
 
         self.logger.info(
-            f"Daemon start parameters: sim={sim}, mockup_sim={mockup_sim}, serialport={serialport}, scene={scene}, localhost_only={localhost_only}, wake_up_on_start={wake_up_on_start}, check_collision={check_collision}, kinematics_engine={kinematics_engine}, headless={headless}, hardware_config_filepath={hardware_config_filepath}"
+            f"Daemon start parameters: sim={sim}, mockup_sim={mockup_sim}, "
+            f"serialport={serialport}, scene={scene}, localhost_only={localhost_only}, "
+            f"wake_up_on_start={wake_up_on_start}, headless={headless}, "
+            f"hardware_config_filepath={hardware_config_filepath}"
         )
 
         # mockup-sim behaves exactly like a real robot for apps (they open webcam directly)
@@ -296,8 +295,6 @@ class Daemon:
                 mockup_sim=mockup_sim,
                 serialport=serialport,
                 scene=scene,
-                check_collision=check_collision,
-                kinematics_engine=kinematics_engine,
                 headless=headless,
                 use_audio=effective_use_audio,
                 hardware_config_filepath=hardware_config_filepath,
@@ -572,27 +569,15 @@ class Daemon:
         mockup_sim: bool,
         serialport: str,
         scene: str,
-        check_collision: bool,
-        kinematics_engine: str,
         headless: bool,
         use_audio: bool,
         hardware_config_filepath: str | None = None,
         reflash_motors_on_start: bool = True,
     ) -> "RobotBackend | MujocoBackend | MockupSimBackend":
         if mockup_sim:
-            return MockupSimBackend(
-                check_collision=check_collision,
-                kinematics_engine=kinematics_engine,
-                use_audio=use_audio,
-            )
+            return MockupSimBackend(use_audio=use_audio)
         elif sim:
-            return MujocoBackend(
-                scene=scene,
-                check_collision=check_collision,
-                kinematics_engine=kinematics_engine,
-                headless=headless,
-                use_audio=use_audio,
-            )
+            return MujocoBackend(scene=scene, headless=headless, use_audio=use_audio)
         else:
             if serialport == "auto":
                 ports = find_serial_port(wireless_version=wireless_version)
@@ -613,7 +598,7 @@ class Daemon:
                 self.logger.info(f"Found Dreambo serial port: {serialport}")
 
             self.logger.info(
-                f"Creating RobotBackend with parameters: serialport={serialport}, check_collision={check_collision}, kinematics_engine={kinematics_engine}"
+                f"Creating RobotBackend with parameters: serialport={serialport}"
             )
 
             if reflash_motors_on_start:
@@ -622,8 +607,6 @@ class Daemon:
             return RobotBackend(
                 serialport=serialport,
                 log_level=self.log_level,
-                check_collision=check_collision,
-                kinematics_engine=kinematics_engine,
                 use_audio=use_audio,
                 wireless_version=wireless_version,
                 hardware_config_filepath=hardware_config_filepath,

@@ -1,11 +1,7 @@
-"""Minimal getting-started example: connect to Dreambo and look up."""
+"""Minimal getting-started example: connect to Dreambo and tilt the neck up."""
 
 from dreambo_torso import Dreambo
-from dreambo_torso.utils import create_head_pose
 
-with Dreambo() as dreambo_torso:
-    # Look up and tilt head
-    dreambo_torso.goto_target(
-        head=create_head_pose(z=10, roll=15, degrees=True, mm=True),
-        duration=1.0
-    )
+with Dreambo() as dreambo:
+    # Chin-up nod with arms at rest.
+    dreambo.goto_target(neck=[0.0, 0.35, 0.0], duration=1.0)

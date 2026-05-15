@@ -1,0 +1,35 @@
+# Named poses for the Dreambo torso, in joint space.
+#
+# Subsystem joint conventions:
+#   neck:       [yaw, pitch, roll]   rad   (+pitch = chin up)
+#   left_arm:   [theta_a, theta_b]   rad   (spherical 5-bar shoulder)
+#   right_arm:  [theta_a, theta_b]   rad   (spherical 5-bar shoulder)
+#   nose:       [top, left, right]   rad
+#
+# Channels left out of a pose entry are simply not driven when that
+# pose is invoked.
+
+init:
+  neck:      [0.0, 0.2, 0.0]
+  left_arm:  [0.0, 0.0]
+  right_arm: [0.0, 0.0]
+  nose:      [0.0, 0.0, 0.0]
+
+wake:
+  # "Chin-up alert" — pitch ~max within [0, 0.45] limit.
+  # Both arm motors are engaged: the spherical 5-bar couples the two
+  # orthogonal ground axes, so any natural arm motion drives both
+  # servos together. theta_a = -pi/6 (yaw motor swings the arm out),
+  # theta_b = +pi/8 (pitch motor lifts it forward). The mirror flag on
+  # the right arm produces a symmetric pose with the same numbers.
+  neck:      [0.0, 0.4, 0.0]
+  left_arm:  [-0.5235987755982988, 0.39269908169872414]
+  right_arm: [-0.5235987755982988, 0.39269908169872414]
+  nose:      [0.0, 0.0, 0.0]
+
+sleep:
+  # Head bowed forward; arms folded down via theta_a = pi/2.
+  neck:      [0.0, 0.0, 0.0]
+  left_arm:  [1.5707963267948966, 0.0]
+  right_arm: [1.5707963267948966, 0.0]
+  nose:      [0.0, 0.0, 0.0]
