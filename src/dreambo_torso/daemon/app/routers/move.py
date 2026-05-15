@@ -168,7 +168,7 @@ async def list_recorded_move_dataset(
     """List available recorded moves in a dataset."""
     try:
         moves = RecordedMoves(dataset_name)
-    except RepositoryNotFoundError as e:
+    except NotExistError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
     return moves.list_moves()
@@ -183,7 +183,7 @@ async def play_recorded_move_dataset(
     """Request the robot to play a predefined recorded move from a dataset."""
     try:
         recorded_moves = RecordedMoves(dataset_name)
-    except RepositoryNotFoundError as e:
+    except NotExistError as e:
         raise HTTPException(status_code=404, detail=str(e))
     try:
         move = recorded_moves.get(move_name)

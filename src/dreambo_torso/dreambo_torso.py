@@ -71,7 +71,7 @@ ConnectionMode = Literal["auto", "localhost_only", "network"]
 
 
 class Dreambo:
-    """DreamboTorso class for controlling a simulated or real robot torso.
+    """dreambo_torso class for controlling a simulated or real robot torso.
 
     Args:
         robot_name: Name of the robot, defaults to "reachy_mini".

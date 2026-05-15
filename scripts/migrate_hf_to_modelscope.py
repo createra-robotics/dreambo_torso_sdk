@@ -1,4 +1,4 @@
-"""Migrate a Hugging Face dataset to a ModelScope dataset.
+r"""Migrate a Hugging Face dataset to a ModelScope dataset.
 
 Downloads every file from the source HF dataset into a local cache and
 re-uploads the snapshot to the destination ModelScope dataset, preserving
@@ -36,6 +36,7 @@ def migrate(
     commit_message: str,
     ignore: list[str] | None,
 ) -> None:
+    """Download ``source`` from Hugging Face and re-upload it to ``dest`` on ModelScope."""
     print(f"[1/2] Downloading HF dataset: {source}")
     local_path = snapshot_download(repo_id=source, repo_type="dataset")
     print(f"      cached at: {local_path}")
@@ -57,6 +58,7 @@ def migrate(
 
 
 def main() -> int:
+    """Parse CLI arguments and run the migration."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--source",
