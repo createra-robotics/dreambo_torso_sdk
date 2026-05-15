@@ -30,6 +30,37 @@ from .backend.robot import RobotBackend
 _central_relay_task: Optional[asyncio.Task[Any]] = None
 
 
+def _install_gst_critical_filter() -> None:
+    # Some V4L2 drivers expose capability ranges where end % step != 0, which
+    # makes GStreamer emit a g_critical() from gst_value_set_int_range_step
+    # during caps probing. Harmless but noisy — drop just that message and
+    # forward everything else to the default GLib handler.
+    try:
+        import gi
+
+        gi.require_version("GLib", "2.0")
+        from gi.repository import GLib
+    except (ImportError, ValueError):
+        return
+
+    def _handler(domain: str, level: int, message: str, _user_data: Any) -> None:
+        if message and "gst_value_set_int_range_step" in message:
+            return
+        GLib.log_default_handler(domain, level, message, None)
+
+    GLib.log_set_handler(
+        "GStreamer",
+        GLib.LogLevelFlags.LEVEL_CRITICAL
+        | GLib.LogLevelFlags.FLAG_RECURSION
+        | GLib.LogLevelFlags.FLAG_FATAL,
+        _handler,
+        None,
+    )
+
+
+_install_gst_critical_filter()
+
+
 class Daemon:
     """Daemon for simulated or real Dreambo robot.
 
