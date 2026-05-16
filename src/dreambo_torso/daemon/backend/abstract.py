@@ -141,9 +141,9 @@ class Backend:
         self._active_move_depth = 0
 
         # WebRTC support
-        self._send_message_to_webrtc: Optional[
-            Callable[[Optional[str], str], None]
-        ] = None
+        self._send_message_to_webrtc: Optional[Callable[[Optional[str], str], None]] = (
+            None
+        )
 
         # Named poses (init / wake / sleep / ...). Loaded lazily on first use.
         self._named_poses: NamedPoses | None = None
@@ -192,7 +192,9 @@ class Backend:
         self,
     ) -> "RobotBackendStatus | MujocoBackendStatus | MockupSimBackendStatus":
         """Return backend status. Subclasses override this."""
-        raise NotImplementedError("Backend.get_status() must be overridden by subclasses.")
+        raise NotImplementedError(
+            "Backend.get_status() must be overridden by subclasses."
+        )
 
     # ------------------------------------------------------------------
     # Publishers
@@ -358,8 +360,12 @@ class Backend:
     ) -> None:
         """Smoothly interpolate any subset of subsystems to the given targets."""
         target_neck = np.asarray(neck, dtype=np.float64) if neck is not None else None
-        target_left = np.asarray(left_arm, dtype=np.float64) if left_arm is not None else None
-        target_right = np.asarray(right_arm, dtype=np.float64) if right_arm is not None else None
+        target_left = (
+            np.asarray(left_arm, dtype=np.float64) if left_arm is not None else None
+        )
+        target_right = (
+            np.asarray(right_arm, dtype=np.float64) if right_arm is not None else None
+        )
         target_nose = np.asarray(nose, dtype=np.float64) if nose is not None else None
 
         await self.play_move(
@@ -436,10 +442,27 @@ class Backend:
         await asyncio.sleep(0.5)
 
     async def goto_sleep(self) -> None:
-        """Run the 'sleep' named pose with the go_sleep.wav cue."""
+        """Run the 'sleep' named pose with the go_sleep.wav cue.
+
+        Releases servo torque on arms and nose the moment the pose
+        finishes interpolating so the SM40BLs are not held at the
+        mechanical envelope: prior versions kept torque on for a
+        further 1 s, which sagged the shared Feetech rail and made
+        the periodic hardware-error check report every motor as
+        comm-failed. Robot-backend only — the helper is a no-op on
+        the mockup/sim where ``self.c`` doesn't exist.
+        """
         self.play_sound("go_sleep.wav")
         await self._goto_named_pose("sleep", duration=2.0)
-        await asyncio.sleep(1.0)
+        controller = getattr(self, "c", None)
+        if controller is not None:
+            try:
+                controller.enable_arms(False)
+                controller.enable_nose(False)
+            except Exception as exc:  # noqa: BLE001
+                self.logger.warning(
+                    "goto_sleep: failed to release arm/nose torque: %s", exc
+                )
 
     # ------------------------------------------------------------------
     # URDF
@@ -518,7 +541,9 @@ class Backend:
                     self.set_target_left_arm_joint_positions(np.array(cmd.joints))
                 else:
                     self.set_target_right_arm_joint_positions(np.array(cmd.joints))
-            send_response({"status": "ok", "command": "set_arm", "side": cmd.side.value})
+            send_response(
+                {"status": "ok", "command": "set_arm", "side": cmd.side.value}
+            )
 
         elif isinstance(cmd, SetNoseCmd):
             if not _maybe_ignore("set_nose"):
@@ -529,8 +554,12 @@ class Backend:
             if not _maybe_ignore("set_full_target"):
                 self.set_target(
                     neck=np.array(cmd.neck) if cmd.neck is not None else None,
-                    left_arm=np.array(cmd.left_arm) if cmd.left_arm is not None else None,
-                    right_arm=np.array(cmd.right_arm) if cmd.right_arm is not None else None,
+                    left_arm=np.array(cmd.left_arm)
+                    if cmd.left_arm is not None
+                    else None,
+                    right_arm=np.array(cmd.right_arm)
+                    if cmd.right_arm is not None
+                    else None,
                     nose=np.array(cmd.nose) if cmd.nose is not None else None,
                 )
             send_response({"status": "ok", "command": "set_full_target"})
@@ -573,8 +602,12 @@ class Backend:
         elif isinstance(cmd, GetStateCmd):
             state = {
                 "neck": self._safe_present(self.get_present_neck_joint_positions),
-                "left_arm": self._safe_present(self.get_present_left_arm_joint_positions),
-                "right_arm": self._safe_present(self.get_present_right_arm_joint_positions),
+                "left_arm": self._safe_present(
+                    self.get_present_left_arm_joint_positions
+                ),
+                "right_arm": self._safe_present(
+                    self.get_present_right_arm_joint_positions
+                ),
                 "nose": self._safe_present(self.get_present_nose_joint_positions),
                 "motor_mode": self.get_motor_control_mode().value,
                 "is_recording": self.is_recording,
@@ -584,11 +617,17 @@ class Backend:
 
         elif isinstance(cmd, GetVersionCmd):
             from importlib.metadata import version
+
             send_response({"version": version("dreambo_torso")})
 
         elif isinstance(
             cmd,
-            (SetVolumeCmd, GetVolumeCmd, SetMicrophoneVolumeCmd, GetMicrophoneVolumeCmd),
+            (
+                SetVolumeCmd,
+                GetVolumeCmd,
+                SetMicrophoneVolumeCmd,
+                GetMicrophoneVolumeCmd,
+            ),
         ):
             self._handle_volume_command(cmd, send_response)
 
@@ -606,7 +645,9 @@ class Backend:
             self.append_record(cmd.record)
             send_response({"status": "ok", "command": "append_record"})
 
-    def _safe_present(self, getter: Callable[[], NDArray[np.float64]]) -> list[float] | None:
+    def _safe_present(
+        self, getter: Callable[[], NDArray[np.float64]]
+    ) -> list[float] | None:
         """Call *getter* and return its result as a list, or None if no data yet."""
         try:
             arr = getter()
@@ -616,7 +657,10 @@ class Backend:
 
     def _handle_volume_command(
         self,
-        cmd: SetVolumeCmd | GetVolumeCmd | SetMicrophoneVolumeCmd | GetMicrophoneVolumeCmd,
+        cmd: SetVolumeCmd
+        | GetVolumeCmd
+        | SetMicrophoneVolumeCmd
+        | GetMicrophoneVolumeCmd,
         send_response: Callable[[dict[str, Any]], None],
     ) -> None:
         from dreambo_torso.daemon.app.routers.volume_control import get_volume_control
@@ -625,7 +669,9 @@ class Backend:
             vc = get_volume_control()
         except Exception as e:
             self.logger.warning("Volume command failed (no control): %s", e)
-            send_response({"error": f"Volume control unavailable: {e}", "command": cmd.type})
+            send_response(
+                {"error": f"Volume control unavailable: {e}", "command": cmd.type}
+            )
             return
 
         if isinstance(cmd, SetVolumeCmd):
@@ -665,7 +711,11 @@ class Backend:
         """Run :meth:`goto_target` and report completion via *send_response*."""
         try:
             await self.goto_target(
-                neck=neck, left_arm=left_arm, right_arm=right_arm, nose=nose, duration=duration
+                neck=neck,
+                left_arm=left_arm,
+                right_arm=right_arm,
+                nose=nose,
+                duration=duration,
             )
             send_response({"status": "ok", "command": "goto_target", "completed": True})
         except Exception as e:
