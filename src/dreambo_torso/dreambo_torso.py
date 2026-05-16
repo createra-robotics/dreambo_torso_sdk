@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Literal, Optional, cast
 import numpy as np
 import numpy.typing as npt
 from asgiref.sync import async_to_sync
+from dreambo_torso_kinematics import DreamboArmKinematics
 
 from dreambo_torso.daemon.utils import daemon_check, is_local_camera_available
 from dreambo_torso.io.protocol import (
@@ -38,7 +39,9 @@ from dreambo_torso.utils.interpolation import InterpolationTechnique
 ConnectionMode = Literal["auto", "localhost_only", "network"]
 
 
-def _as_list(value: Optional[npt.NDArray[np.float64] | List[float]]) -> Optional[List[float]]:
+def _as_list(
+    value: Optional[npt.NDArray[np.float64] | List[float]],
+) -> Optional[List[float]]:
     """Coerce *value* to a Python list of floats, or pass through None."""
     if value is None:
         return None
@@ -49,9 +52,10 @@ class Dreambo:
     """Client for the Dreambo torso daemon.
 
     Drives the four joint-space subsystems and exposes media (camera,
-    microphone, sound) plus recording. Kinematics (neck FK/IK, arm
-    spherical 5-bar) will land later from the dreambo-torso-kinematics
-    crate; this class currently speaks only joint angles.
+    microphone, sound) plus recording. The arm subsystems also accept a
+    higher-level pointing-direction API (``set_arm_direction`` /
+    ``goto_arm_direction``) that resolves to motor pairs via the
+    spherical 5-bar IK from ``dreambo_torso_kinematics``.
     """
 
     def __init__(
@@ -74,14 +78,19 @@ class Dreambo:
         self.host = host
         self.port = port
         daemon_check(spawn_daemon, use_sim)
-        normalized_mode = self._normalize_connection_mode(connection_mode, localhost_only)
-        self.client, self.connection_mode = self._initialize_client(normalized_mode, timeout)
+        normalized_mode = self._normalize_connection_mode(
+            connection_mode, localhost_only
+        )
+        self.client, self.connection_mode = self._initialize_client(
+            normalized_mode, timeout
+        )
         self._daemon_http_url = f"http://{self.client.host}:{self.client.port}"
         self.is_recording = False
         self._move_cancelled = False
         self._media_released = False
         self._log_level = log_level
         self._media_backend = media_backend
+        self._arm_kin: Dict[str, DreamboArmKinematics] = {}
         self.media_manager = self._configure_mediamanager(media_backend, log_level)
 
     def __del__(self) -> None:
@@ -132,7 +141,9 @@ class Dreambo:
             self.logger.error("Failed to re-acquire media on daemon.")
             return
         self.media_manager.close()
-        self.media_manager = self._configure_mediamanager(self._media_backend, self._log_level)
+        self.media_manager = self._configure_mediamanager(
+            self._media_backend, self._log_level
+        )
         self._media_released = False
         self.logger.info("Media re-acquired by daemon.")
 
@@ -144,13 +155,16 @@ class Dreambo:
             return None
         return imu_msg.model_dump(exclude={"type"})
 
-    def _configure_mediamanager(self, media_backend: str, log_level: str) -> MediaManager:
+    def _configure_mediamanager(
+        self, media_backend: str, log_level: str
+    ) -> MediaManager:
         """Pick a :class:`MediaBackend` and return a configured :class:`MediaManager`."""
         daemon_status = self.client.get_status()
         self._warn_if_daemon_version_mismatch(daemon_status)
 
         specs_name = getattr(daemon_status, "camera_specs_name", "")
         from dreambo_torso.media.camera_constants import get_camera_specs_by_name
+
         camera_specs = get_camera_specs_by_name(specs_name) if specs_name else None
 
         if media_backend.lower() == "no_media":
@@ -162,14 +176,20 @@ class Dreambo:
                 self.release_media()
             mbackend = MediaBackend.NO_MEDIA
         elif getattr(daemon_status, "no_media", False):
-            self.logger.info("Daemon reports no_media=True — skipping media initialisation.")
+            self.logger.info(
+                "Daemon reports no_media=True — skipping media initialisation."
+            )
             mbackend = MediaBackend.NO_MEDIA
         elif media_backend.lower() in ("default", "auto"):
             if self.connection_mode == "localhost_only" and is_local_camera_available():
-                self.logger.info("Auto-detected local IPC endpoint. Using LOCAL backend.")
+                self.logger.info(
+                    "Auto-detected local IPC endpoint. Using LOCAL backend."
+                )
                 mbackend = MediaBackend.LOCAL
             else:
-                self.logger.info("No local IPC endpoint. Using WebRTC backend for streaming.")
+                self.logger.info(
+                    "No local IPC endpoint. Using WebRTC backend for streaming."
+                )
                 mbackend = MediaBackend.WEBRTC
         else:
             try:
@@ -245,7 +265,9 @@ class Dreambo:
         requested_mode = cast(ConnectionMode, requested_mode.lower())
         if requested_mode == "auto":
             try:
-                client = self._connect_single(host="localhost", port=self.port, timeout=timeout)
+                client = self._connect_single(
+                    host="localhost", port=self.port, timeout=timeout
+                )
                 selected: ConnectionMode = "localhost_only"
             except Exception as err:
                 self.logger.info(
@@ -267,7 +289,9 @@ class Dreambo:
 
         if requested_mode == "localhost_only":
             try:
-                client = self._connect_single(host="localhost", port=self.port, timeout=timeout)
+                client = self._connect_single(
+                    host="localhost", port=self.port, timeout=timeout
+                )
             except (ConnectionError, TimeoutError):
                 raise ConnectionError(
                     "Could not connect to daemon on localhost. Is the Dreambo daemon running?"
@@ -275,7 +299,9 @@ class Dreambo:
             selected = "localhost_only"
         else:
             try:
-                client = self._connect_single(host=self.host, port=self.port, timeout=timeout)
+                client = self._connect_single(
+                    host=self.host, port=self.port, timeout=timeout
+                )
             except (ConnectionError, TimeoutError):
                 raise ConnectionError("Network connection attempt failed.")
             selected = "network"
@@ -314,6 +340,68 @@ class Dreambo:
         self.client.send_command(SetArmCmd(side=ArmSide(side), joints=joints_list))
         self._record({"time": time.time(), f"{side}_arm": joints_list})
 
+    def _arm_kinematics(self, side: Literal["left", "right"]) -> DreamboArmKinematics:
+        """Return (and lazily cache) the kinematics object for *side*."""
+        if side not in self._arm_kin:
+            self._arm_kin[side] = (
+                DreamboArmKinematics.default_left()
+                if side == "left"
+                else DreamboArmKinematics.default_right()
+            )
+        return self._arm_kin[side]
+
+    def _resolve_arm_direction(
+        self,
+        side: Literal["left", "right"],
+        direction: npt.NDArray[np.float64] | List[float],
+    ) -> List[float]:
+        """Resolve a shoulder-local pointing direction to ``[theta_a, theta_b]``.
+
+        The branch closest to the current arm state is selected. Raises
+        ``RuntimeError`` (via the kinematics crate) if the direction is
+        outside the reachable workspace.
+        """
+        dir_list = _as_list(direction)
+        assert dir_list is not None and len(dir_list) == 3, (
+            f"Arm direction must be a 3-vector, got {dir_list}."
+        )
+        near = tuple(self.get_current_joints()[f"{side}_arm"])
+        theta_a, theta_b = self._arm_kinematics(side).ik_from_direction(
+            dir_list, near=near
+        )
+        return [theta_a, theta_b]
+
+    def set_arm_direction(
+        self,
+        side: Literal["left", "right"],
+        direction: npt.NDArray[np.float64] | List[float],
+    ) -> None:
+        """Point the arm along *direction* (shoulder-local 3-vector).
+
+        Same vector for both arms — the mirror flag on the right-arm
+        geometry handles symmetry. IK picks the ``(theta_a, theta_b)``
+        branch closest to the current arm state and the SDK then drives
+        both servos together via ``set_arm``.
+        """
+        self.set_arm(side, self._resolve_arm_direction(side, direction))
+
+    def goto_arm_direction(
+        self,
+        side: Literal["left", "right"],
+        direction: npt.NDArray[np.float64] | List[float],
+        duration: float = 0.5,
+        method: InterpolationTechnique = InterpolationTechnique.MIN_JERK,
+    ) -> None:
+        """Smoothly move the arm to point along *direction*."""
+        joints = self._resolve_arm_direction(side, direction)
+        kwargs: Dict[str, Any] = {f"{side}_arm": joints}
+        self.goto_target(duration=duration, method=method, **kwargs)
+
+    def get_arm_direction(self, side: Literal["left", "right"]) -> List[float]:
+        """Return the arm's current pointing direction (shoulder-local 3-vector)."""
+        theta_a, theta_b = self.get_current_joints()[f"{side}_arm"]
+        return list(self._arm_kinematics(side).direction(theta_a, theta_b))
+
     def set_nose(self, joints: npt.NDArray[np.float64] | List[float]) -> None:
         """Set the target nose joint positions [top, left, right] (radians)."""
         joints_list = _as_list(joints)
@@ -337,7 +425,9 @@ class Dreambo:
         nose_list = _as_list(nose)
 
         if all(v is None for v in (neck_list, left_list, right_list, nose_list)):
-            raise ValueError("At least one of neck, left_arm, right_arm or nose must be provided.")
+            raise ValueError(
+                "At least one of neck, left_arm, right_arm or nose must be provided."
+            )
 
         self.client.send_command(
             SetFullTargetCmd(
@@ -370,9 +460,13 @@ class Dreambo:
     ) -> None:
         """Smoothly interpolate any subset of subsystems to the given targets."""
         if all(v is None for v in (neck, left_arm, right_arm, nose)):
-            raise ValueError("At least one of neck, left_arm, right_arm or nose must be provided.")
+            raise ValueError(
+                "At least one of neck, left_arm, right_arm or nose must be provided."
+            )
         if duration <= 0.0:
-            raise ValueError("Duration must be positive. Use set_target() for immediate moves.")
+            raise ValueError(
+                "Duration must be positive. Use set_target() for immediate moves."
+            )
 
         req = GotoTaskRequest(
             neck=_as_list(neck),
@@ -392,11 +486,13 @@ class Dreambo:
     def wake_up(self) -> None:
         """Run the daemon's 'wake' named pose + wake_up.wav."""
         from dreambo_torso.io.protocol import WakeUpCmd
+
         self.client.send_command(WakeUpCmd())
 
     def goto_sleep(self) -> None:
         """Run the daemon's 'sleep' named pose + go_sleep.wav."""
         from dreambo_torso.io.protocol import GotoSleepCmd
+
         self.client.send_command(GotoSleepCmd())
 
     # ------------------------------------------------------------------

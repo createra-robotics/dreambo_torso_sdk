@@ -1,4 +1,4 @@
-# Named poses for the Dreambo torso, in joint space.
+# Named poses for the Dreambo torso.
 #
 # Subsystem joint conventions:
 #   neck:       [yaw, pitch, roll]   rad   (+pitch = chin up)
@@ -6,30 +6,44 @@
 #   right_arm:  [theta_a, theta_b]   rad   (spherical 5-bar shoulder)
 #   nose:       [top, left, right]   rad
 #
+# Arm entries also accept the pointing-direction form
+#   left_arm: {direction: [x, y, z]}
+# which resolves to (theta_a, theta_b) via the spherical 5-bar IK in
+# dreambo_torso_kinematics. The direction vector is in the Rust crate's
+# internal (body-fixed) frame; the reachable workspace differs between
+# left and right arms because `default_right` is mirrored, so the two
+# arms typically need different direction vectors for the same gesture.
+#
 # Channels left out of a pose entry are simply not driven when that
 # pose is invoked.
 
 init:
+  # Joint-space home. Zeros are the natural identity for calibration.
   neck:      [0.0, 0.2, 0.0]
   left_arm:  [0.0, 0.0]
   right_arm: [0.0, 0.0]
   nose:      [0.0, 0.0, 0.0]
 
 wake:
-  # "Chin-up alert" — pitch ~max within [0, 0.45] limit.
-  # Both arm motors are engaged: the spherical 5-bar couples the two
-  # orthogonal ground axes, so any natural arm motion drives both
-  # servos together. theta_a = -pi/6 (yaw motor swings the arm out),
-  # theta_b = +pi/8 (pitch motor lifts it forward). The mirror flag on
-  # the right arm produces a symmetric pose with the same numbers.
+  # "Chin-up alert" — pitch ~max within [0, 0.45] limit; both arm
+  # motors engaged. Direction values come from FK at the previous joint
+  # numbers (-pi/6, +pi/8) on each arm; we keep separate L/R vectors
+  # because default_right is rotated 180° about Z relative to default_left.
   neck:      [0.0, 0.4, 0.0]
-  left_arm:  [-0.5235987755982988, 0.39269908169872414]
-  right_arm: [-0.5235987755982988, 0.39269908169872414]
+  left_arm:  {direction: [0.5865434383737851, 0.17114301078357647, 0.7916292470346148]}
+  right_arm: {direction: [-0.5865434383737851, -0.17114301078357647, 0.7916292470346148]}
   nose:      [0.0, 0.0, 0.0]
 
 sleep:
-  # Head bowed forward; arms folded down via theta_a = pi/2.
+  # Head bowed forward; arms folded down at theta_a = 1.2 rad (~69°).
+  # Previously this was pi/2 (~1.5708), but that target sat past the
+  # spherical-5-bar FK workspace and at/over the real mechanical limit,
+  # so during daemon shutdown all four arm SM40BLs stalled trying to
+  # hold the pose, sagged the shared Feetech rail, and the periodic
+  # hardware_error_check reported every motor as comm-failed. 1.2 rad
+  # is inside the reachable region for the placeholder geometry and
+  # well within the physical envelope.
   neck:      [0.0, 0.0, 0.0]
-  left_arm:  [1.5707963267948966, 0.0]
-  right_arm: [1.5707963267948966, 0.0]
+  left_arm:  [1.2, 0.0]
+  right_arm: [1.2, 0.0]
   nose:      [0.0, 0.0, 0.0]
