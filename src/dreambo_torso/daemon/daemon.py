@@ -20,6 +20,10 @@ from dreambo_torso.daemon.utils import (
 )
 from dreambo_torso.io.protocol import DaemonState, DaemonStatus, MotorControlMode
 from dreambo_torso.io.ws_server import WSServer
+from dreambo_torso.motion.recorded_move import (
+    DEFAULT_EMOTION_LIBRARY,
+    prefetch_dataset,
+)
 from dreambo_torso.tools.reflash_motors import reflash_motors_if_needed
 
 from .backend.mockup_sim import MockupSimBackend
@@ -359,6 +363,7 @@ class Daemon:
             if self._status.state != DaemonState.ERROR:
                 self.logger.info("Daemon started successfully.")
                 self._status.state = DaemonState.RUNNING
+                self._start_emotion_library_prefetch()
             else:
                 self.logger.error("Daemon started with errors.")
 
@@ -368,6 +373,47 @@ class Daemon:
             self.logger.error(f"Failed to start daemon: {e}")
 
         return self._status.state
+
+    def _start_emotion_library_prefetch(self) -> None:
+        """Refresh the emotion-library cache from ModelScope in the background.
+
+        Spawned once at the end of :meth:`start` as a daemon thread so
+        the cloud round-trip never delays daemon readiness. Once this
+        thread finishes, the cache mirrors ``master`` on ModelScope and
+        every subsequent ``/api/move/recorded-move-dataset/...`` request
+        served by :class:`RecordedMoves` resolves purely from disk —
+        the play button stays snappy.
+
+        Failures are logged as warnings; the daemon keeps using
+        whatever cached snapshot already exists (or the one-shot
+        bootstrap fetch in :class:`RecordedMoves` if the cache is
+        empty).
+        """
+
+        def _bg_prefetch() -> None:
+            self.logger.info(
+                "Refreshing emotion library cache from ModelScope (%s)...",
+                DEFAULT_EMOTION_LIBRARY,
+            )
+            t0 = time.time()
+            path = prefetch_dataset(DEFAULT_EMOTION_LIBRARY)
+            elapsed = time.time() - t0
+            if path is not None:
+                self.logger.info(
+                    "Emotion library cache ready at %s (%.1fs)", path, elapsed
+                )
+            else:
+                self.logger.warning(
+                    "Emotion library prefetch did not refresh (offline or "
+                    "ModelScope unreachable); serving whatever the local "
+                    "cache holds."
+                )
+
+        Thread(
+            target=_bg_prefetch,
+            daemon=True,
+            name="emotion-library-prefetch",
+        ).start()
 
     async def stop(self, goto_sleep_on_stop: bool = True) -> "DaemonState":
         """Stop the Dreambo daemon.
