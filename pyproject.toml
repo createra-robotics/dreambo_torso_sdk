@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dreambo-torso"
-version = "1.0.2"
+version = "1.0.3"
 authors = [{ name = "CreatEra Robotics", email = "contact@createra.tech" }]
 description = ""
 readme = "README.md"
@@ -12,7 +12,7 @@ requires-python = ">=3.10"
 dependencies = [
     "numpy>=2.2.5",
     "scipy>=1.15.3, <2.0.0",
-    "dreambo_motor_controller>=1.2.0",
+    "dreambo_motor_controller>=1.3.0",
     "motorcom>=1.1.1",
     "psutil",
     "jinja2",
@@ -22,7 +22,7 @@ dependencies = [
     "starlette<1.0.0",   #Fix: for starlette >= 1.0.0, we need to implement TemplateResponse(request, name, context)
     "pyserial",
     "huggingface-hub==1.3.0",
-    "dreambo-torso-kinematics>=2.0.0",
+    "dreambo-torso-kinematics>=2.1.0",
     "asgiref",
     "aiohttp",
     "log-throttling==0.0.3",
@@ -48,6 +48,7 @@ dependencies = [
     "scipy-stubs>=1.15.3.0",
     "pycairo>=1.29.0",
     "modelscope>=1.36.3",
+    "python-dotenv>=1.2.2",
 ]
 
 [project.optional-dependencies]

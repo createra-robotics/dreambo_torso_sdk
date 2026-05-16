@@ -295,3 +295,133 @@ DREAMBO_DISABLE_AUDIO=1 dreambo-torso-daemon
 #Or export it once for the session:
 export DREAMBO_DISABLE_AUDIO=1
 ```
+
+---
+
+## Motion Library
+
+Pre-recorded emotion clips are hosted on the
+[`tonylabs/dreambo-emotions-library`](https://www.modelscope.cn/datasets/tonylabs/dreambo-emotions-library)
+dataset on ModelScope. Each clip is a per-frame trajectory JSON paired
+with an audio cue WAV of the same basename (`yes1.json` ↔ `yes1.wav`).
+The SDK loads them via `dreambo_torso.motion.recorded_move.RecordedMoves`,
+which resolves the JSON–WAV pairing client-side at playback time.
+
+### Startup prefetch, then local-only playback
+
+When the daemon finishes starting up it spawns a background thread that
+calls `prefetch_dataset(DEFAULT_EMOTION_LIBRARY)` — a content-addressed
+refresh against ModelScope's `master` revision. Unchanged blobs stay on
+disk; only new or modified files cross the network. The refresh runs
+out of band, so daemon readiness is not delayed.
+
+Once the prefetch completes (typically a couple of seconds for a
+no-change refresh), every subsequent
+
+- `GET /api/move/recorded-move-datasets/list/{dataset}`
+- `POST /api/move/play/recorded-move-dataset/{dataset}/{clip}`
+
+resolves **only from the local cache** — `RecordedMoves` never touches
+the network on construction. Play buttons stay responsive.
+
+The local snapshot lives at
+`~/.cache/modelscope/hub/datasets/<namespace>/<dataset>/`. If the Pi is
+offline at daemon launch, the prefetch logs a warning and the daemon
+serves whatever the cache already has. The first-ever launch on a fresh
+machine still has a fallback path: if no cache exists, `RecordedMoves`
+performs a one-time bootstrap fetch on first request.
+
+**Net effect for operators**: record a new clip with
+`scripts/emotion_library/record.py` → push lands on ModelScope → restart
+the consumer daemon → it pulls the change at startup → play button
+serves the new clip from disk on the next click.
+
+### Recording new clips
+
+New emotion clips are captured by hand-puppeteering the arms while
+`scripts/emotion_library/record.py` samples the servo positions at
+100 Hz, then auto-pushes the resulting JSON to ModelScope. Run it on
+the Pi connected to the robot.
+
+#### Prerequisites
+
+- The Feetech serial bus and CAN interface that the daemon uses must be
+  available (`/dev/ttyACM0` and `can0` are the defaults). The recorder talks to the motor controller
+  directly, so **stop the daemon first** — the two cannot share the
+  same serial port.
+- A ModelScope access token from
+  https://www.modelscope.cn/my/myaccesstoken with write scope on the
+  target dataset. Drop it into the repo-local `.env` file (template at
+  `.env.example`):
+
+  ```dotenv
+  MODELSCOPE_API_TOKEN=ms-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  ```
+
+  The recorder loads `.env` automatically; no shell export needed.
+
+#### Capture a single clip
+
+```bash
+uv run python scripts/emotion_library/record.py \
+    --emotion yes2 \
+    --description "A short affirmative — single nod, arms steady." \
+    --play-wav
+```
+
+What happens, in order:
+
+1. Connects to the motor controller and disables arm + nose torque so
+   the joints go limp. Neck is untouched.
+2. Prints a 3-second countdown. Position the arms / nose in their
+   starting pose during this window.
+3. Starts sampling at 100 Hz. The matching audio cue (e.g. `yes2.wav`
+   from `scripts/emotion_library/sound/`) plays once at the start when
+   `--play-wav` is set.
+4. **Press `r`** to stop and save; **press `q`** to abort. A 60-second
+   safety cap stops the recording automatically if neither key is
+   pressed.
+5. Computes upper-arm direction vectors via the spherical-5-bar FK and
+   writes the JSON to `scripts/emotion_library/dataset/<emotion>.json`
+   in the schema documented in
+   [`src/dreambo_torso/motion/recorded_move.py`](src/dreambo_torso/motion/recorded_move.py).
+   If any frame's FK fails, the recorder falls back to saving raw
+   `(theta_a, theta_b)` joints and prints a hint.
+6. Re-enables arm + nose torque so the daemon comes back up in a
+   playable state.
+7. Pushes the JSON to `tonylabs/dreambo-emotions-library` on ModelScope
+   (skip with `--no-upload` to keep the recording local).
+
+#### Useful flags
+
+| Flag                       | Default                                | Purpose                                             |
+| -------------------------- | -------------------------------------- | --------------------------------------------------- |
+| `--emotion <name>`         | required                               | Clip name (also the JSON / WAV basename).            |
+| `--description "..."`      | empty, or read from existing JSON      | Human-readable caption stored in the row.            |
+| `--play-wav`               | off                                    | Play the matching `.wav` cue at start.               |
+| `--no-upload`              | off                                    | Skip the ModelScope push; keep the JSON local only.  |
+| `--max-duration <seconds>` | 60                                     | Safety cap on the recording length.                  |
+| `--fps <hz>`               | 100                                    | Sampling rate.                                       |
+| `--keep-torque`            | off                                    | Skip the torque-off step (headless dry-runs).        |
+| `--dry-run`                | off                                    | Print a summary but do not write the JSON.           |
+
+If a JSON with the target name already exists locally and `--description`
+isn't supplied, the recorder reuses the existing description so you can
+re-record a clip without retyping the caption.
+
+#### After recording
+
+The clip is in the cloud, but consumer daemons that are already running
+will keep serving their cached snapshot — `RecordedMoves` never touches
+the network once a cache exists. To propagate the new clip:
+
+```bash
+# on each consumer Pi
+systemctl --user restart dreambo-torso-daemon   # or however you launch it
+```
+
+The startup prefetch on the next daemon launch pulls the change and the
+new clip becomes available on the very first play-button click. No
+manual `rm -rf ~/.cache/...` needed.
+
+
