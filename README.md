@@ -1,6 +1,6 @@
 # Dreamo Robot Torso SDK 🤖
 
-**Reachy Mini is an open-source, expressive robot made for hackers and AI builders.**
+**Dreambo robot is an open-source, expressive robot made for hackers and AI builders.**
 
 ## ⚡️ Build and start your own robot
 
