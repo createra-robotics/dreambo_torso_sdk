@@ -34,14 +34,17 @@ from dreambo_torso import __file__ as _dt_init
 from dreambo_torso.tools.scan_motors import find_serial_port
 from dreambo_torso.utils.hardware_config.parser import MotorConfig, parse_yaml_config
 
-DEFAULT_CONFIG = (
-    Path(_dt_init).parent / "assets" / "config" / "hardware_config.yaml"
-)
+DEFAULT_CONFIG = Path(_dt_init).parent / "assets" / "config" / "hardware_config.yaml"
 
 FACTORY_DEFAULT_ID = 1
 FACTORY_DEFAULT_BAUDRATE = 1000000
 SERIAL_TIMEOUT = 0.01  # seconds
 MOTOR_SETUP_DELAY = 0.1  # seconds
+# Writes to EEPROM-area registers (offset, angle limits, mode, …) and the lock
+# register commit to flash, which a FeeTech servo can take several ms to ACK —
+# far longer than the ~10 ms read window used for pings/reads. Give those writes
+# a generous timeout so the late status packet isn't mistaken for a timeout.
+EEPROM_WRITE_TIMEOUT = 0.5  # seconds
 
 # Dreambo torso bus layout — arms are SM40BL (IDs 1-4), nose is STS3025BL (IDs 5-7).
 ARM_IDS = {1, 2, 3, 4}
@@ -107,12 +110,26 @@ def setup_motor(
         from_baudrate,
         family_id=motor_config.id,
     ):
-        raise RuntimeError(
-            f"Motor '{id2name.get(from_id, from_id)}' not found!"
-        )
+        raise RuntimeError(f"Motor '{id2name.get(from_id, from_id)}' not found!")
 
     # Make sure the torque is disabled to be able to write EEPROM
     disable_torque(serial_port, from_id, from_baudrate, family_id=motor_config.id)
+
+    # Unlock the EEPROM before writing. FeeTech SM/STS servos gate their
+    # EEPROM-area registers behind the "Lock Mark" (address 55): while locked,
+    # writes update the live working copy — so an immediate read-back succeeds —
+    # but are never committed to flash, so they silently revert on the next
+    # power-cycle. Newer SM40BL units ship locked (older ones shipped unlocked),
+    # which is why a legacy motor persists its config while a new one needs
+    # reflashing on every boot. Unlock here, re-lock at the end to commit.
+    set_eeprom_lock(
+        serial_port,
+        from_id,
+        locked=False,
+        baudrate=from_baudrate,
+        family_id=motor_config.id,
+    )
+    time.sleep(MOTOR_SETUP_DELAY)
     try:
         if from_baudrate != target_baudrate:
             change_baudrate(
@@ -178,6 +195,18 @@ def setup_motor(
         )
 
         time.sleep(MOTOR_SETUP_DELAY)
+
+        # Re-lock the EEPROM. The unlocked -> locked transition is what flushes
+        # the working copy to flash, so the values written above survive the
+        # next power-cycle. The motor is now at its configured id/baudrate.
+        set_eeprom_lock(
+            serial_port,
+            motor_config.id,
+            locked=True,
+            baudrate=target_baudrate,
+            family_id=motor_config.id,
+        )
+        time.sleep(MOTOR_SETUP_DELAY)
     except Exception as e:
         print(f"Error while setting up motor ID {from_id}: {e}")
         raise e
@@ -218,9 +247,38 @@ def disable_torque(
         serial_port,
         family_id if family_id is not None else id,
         baudrate,
-        SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Write"]) / baudrate,
+        EEPROM_WRITE_TIMEOUT,
     )
     c.write_torque_enable(id, False)
+    print("[OK]")
+
+
+def set_eeprom_lock(
+    serial_port: str,
+    id: int,
+    locked: bool,
+    baudrate: int,
+    family_id: int | None = None,
+) -> None:
+    """Lock or unlock the motor's EEPROM (FeeTech "Lock Mark", address 55).
+
+    While locked, writes to EEPROM-area registers (id, baudrate, offset, angle
+    limits, operating mode, …) update the live working copy but are not committed
+    to flash, so they revert on the next power-cycle. Unlock before reflashing
+    and re-lock afterwards; the unlocked -> locked transition commits the writes.
+    """
+    print(
+        f"{'Locking' if locked else 'Unlocking'} EEPROM for motor with ID {id}...",
+        end="",
+        flush=True,
+    )
+    c = _make_controller(
+        serial_port,
+        family_id if family_id is not None else id,
+        baudrate,
+        EEPROM_WRITE_TIMEOUT,
+    )
+    c.write_lock(id, locked)
     print("[OK]")
 
 
@@ -237,7 +295,7 @@ def change_baudrate(
         serial_port,
         family_id if family_id is not None else id,
         base_baudrate,
-        SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Write"]) / base_baudrate,
+        EEPROM_WRITE_TIMEOUT,
     )
     c.write_baudrate(id, FT_BAUDRATE_CONV_TABLE[target_baudrate])
     print("[OK]")
@@ -250,7 +308,7 @@ def change_id(serial_port: str, current_id: int, new_id: int, baudrate: int) -> 
         serial_port,
         new_id,
         baudrate,
-        SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Write"]) / baudrate,
+        EEPROM_WRITE_TIMEOUT,
     )
     c.write_id(current_id, new_id)
     print("[OK]")
@@ -263,7 +321,7 @@ def change_offset(serial_port: str, id: int, offset: int, baudrate: int) -> None
         serial_port,
         id,
         baudrate,
-        SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Write"]) / baudrate,
+        EEPROM_WRITE_TIMEOUT,
     )
     c.write_raw_offset(id, offset)
     print("[OK]")
@@ -282,7 +340,7 @@ def change_operating_mode(
         serial_port,
         id,
         baudrate,
-        SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Write"]) / baudrate,
+        EEPROM_WRITE_TIMEOUT,
     )
     c.write_mode(id, operating_mode)
     print("[OK]")
@@ -305,9 +363,12 @@ def change_angle_limits(
         serial_port,
         id,
         baudrate,
-        SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Write"]) / baudrate,
+        EEPROM_WRITE_TIMEOUT,
     )
     c.write_raw_min_angle_limit(id, angle_limit_min)
+    # Let the first EEPROM/flash commit settle before the paired write so the
+    # servo isn't hit mid-flash-cycle.
+    time.sleep(MOTOR_SETUP_DELAY)
     c.write_raw_max_angle_limit(id, angle_limit_max)
     print("[OK]")
 
@@ -325,7 +386,7 @@ def change_shutdown_error(
         serial_port,
         id,
         baudrate,
-        SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Write"]) / baudrate,
+        EEPROM_WRITE_TIMEOUT,
     )
     c.write_unloading_condition(id, shutdown_error)
     print("[OK]")
@@ -344,7 +405,7 @@ def change_return_delay_time(
         serial_port,
         id,
         baudrate,
-        SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Write"]) / baudrate,
+        EEPROM_WRITE_TIMEOUT,
     )
     c.write_return_delay_time(id, return_delay_time)
     print("[OK]")
