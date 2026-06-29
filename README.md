@@ -55,6 +55,27 @@ sudo apt install gstreamer1.0-plugins-base-apps
 #example: gst-device-monitor-1.0 Audio/Source 2>&1 | head -80
 ````
 
+## Feetech Serial Port Permission
+
+```bash
+sudo usermod -aG dialout ubuntu
+```
+
+```bash
+sudo tee /etc/udev/rules.d/99-dreambo-serial.rules >/dev/null <<'EOF'                                                                                                                                                                                                                                    
+# Dreambo CH343/CH9102 USB-serial adapter (QinHeng 1a86:55d3)                                                                                                                                                                                                                                            
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d3", OWNER="ubuntu", MODE="0600", SYMLINK+="dreambo_serial", ENV{ID_MM_DEVICE_IGNORE}="1"
+EOF
+```
+
+```bash
+sudo udevadm control --reload
+sudo udevadm trigger
+newgrp dialout
+```
+
+---
+
 #### Rust
 
 ```bash
