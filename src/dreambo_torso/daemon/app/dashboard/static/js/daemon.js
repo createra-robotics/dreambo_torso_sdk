@@ -92,49 +92,41 @@ const daemon = {
     },
 
     updateUI: async () => {
-        const daemonStatusAnim = document.getElementById('daemon-status-anim');
         const toggleDaemonSwitch = document.getElementById('daemon-toggle');
         const backendStatusIcon = document.getElementById('backend-status-icon');
         const backendStatusText = document.getElementById('backend-status-text');
+        const stateWord = document.getElementById('daemon-state-word');
+        const telemetryState = document.getElementById('telemetry-state');
 
         let daemonState = daemon.currentStatus.state;
 
+        // Apply readout: { word, sub, led(class), checked, disabled }
+        const setReadout = (word, sub, led, checked, disabled) => {
+            toggleDaemonSwitch.disabled = !!disabled;
+            toggleDaemonSwitch.checked = !!checked;
+            backendStatusIcon.classList.remove('is-online', 'is-warn', 'is-fault');
+            if (led) backendStatusIcon.classList.add(led);
+            if (stateWord) stateWord.textContent = word;
+            if (backendStatusText) backendStatusText.textContent = sub;
+            if (telemetryState) telemetryState.textContent = (daemonState || 'unknown').toUpperCase();
+        };
+
         toggleDaemonSwitch.disabled = false;
-        backendStatusIcon.classList.remove('bg-green-500', 'bg-yellow-500', 'bg-red-500');
 
         if (daemonState === 'starting') {
-            daemonStatusAnim.setAttribute('src', '/static/assets/dreambo_side_view.png');
-            toggleDaemonSwitch.disabled = true;
-            toggleDaemonSwitch.checked = true;
-            backendStatusIcon.classList.add('bg-yellow-500');
-            backendStatusText.textContent = 'Waking up...';
+            setReadout('WAKING', 'Waking up…', 'is-warn', true, true);
         }
         else if (daemonState === 'running') {
-            // daemonStatusAnim.setAttribute('data', '/static/assets/reachy-mini-awake.svg');
-            daemonStatusAnim.setAttribute('src', '/static/assets/dreambo_side_view.png');
-            toggleDaemonSwitch.checked = true;
-            backendStatusIcon.classList.add('bg-green-500');
-            backendStatusText.textContent = 'Up and ready';
+            setReadout('ONLINE', 'Up and ready', 'is-online', true, false);
         }
         else if (daemonState === 'stopping') {
-            daemonStatusAnim.setAttribute('src', '/static/assets/dreambo_side_view.png');
-            toggleDaemonSwitch.disabled = true;
-            toggleDaemonSwitch.checked = false;
-            backendStatusIcon.classList.add('bg-yellow-500');
-            backendStatusText.textContent = 'Going to sleep...';
+            setReadout('SLEEPING', 'Going to sleep…', 'is-warn', false, true);
         }
         else if (daemonState === 'stopped' || daemonState === 'not_initialized') {
-            daemonStatusAnim.setAttribute('src', '/static/assets/dreambo_side_view.png');
-            toggleDaemonSwitch.checked = false;
-            backendStatusIcon.classList.add('bg-yellow-500');
-            backendStatusText.textContent = 'Stopped';
+            setReadout('STANDBY', 'Powered down', null, false, false);
         }
         else if (daemonState === 'error') {
-            daemonStatusAnim.setAttribute('src', '/static/assets/dreambo_side_view.png');
-            toggleDaemonSwitch.checked = false;
-            backendStatusIcon.classList.add('bg-red-500');
-            backendStatusText.textContent = 'Error occurred';
-
+            setReadout('FAULT', 'Error occurred', 'is-fault', false, false);
             notificationCenter.showError(daemon.currentStatus.error);
         }
 

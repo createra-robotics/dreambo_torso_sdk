@@ -1,79 +1,106 @@
-<section class="flex flex-col md:flex-row gap-4">
-    <!-- Daemon Status Animation -->
-    <div class="flex-1 min-w-[50%] justify-center items-center flex">
-        <img id="daemon-status-anim" src="" alt="Daemon status" class="w-full h-auto">
-    </div>
-    <div class="flex-1 py-2">
-        <div class="flex justify-between items-center">
-            <div class="daemon-status-title">Dreambo Torso</div>
-            <div class="flex items-center gap-3">
-                <!-- HuggingFace Auth -->
-                <div id="hf-header-auth" class="flex items-center gap-2">
-                    <!-- HF Space Apps status (shown when logged in) -->
-                    <div id="hf-relay-status" class="hidden px-2 py-1 rounded-md flex items-center gap-1.5 cursor-help"
-                        style="background-color: #f3f4f6; border: 1px solid #d1d5db;"
-                        title="HF Space Apps">
-                        <div id="hf-relay-indicator" class="w-2 h-2 rounded-full" style="background-color: #9ca3af;"></div>
-                        <span id="hf-relay-text" class="text-xs font-medium" style="color: #6b7280;">--</span>
-                    </div>
-                    <!-- User badge (shown when logged in) -->
-                    <div id="hf-header-user-badge" class="hidden px-3 py-1.5 rounded-lg flex items-center gap-2"
-                        style="background-color: #d1fae5; border: 1px solid #86efac;">
-                        <div class="w-2 h-2 rounded-full" style="background-color: #10b981;"></div>
-                        <span class="text-sm font-medium" style="color: #065f46;">ModelScope<span id="hf-header-username"></span></span>
-                    </div>
-                    <!-- Login/Logout button -->
-                    <button
-                        id="hf-header-auth-btn"
-                        onclick="hfAuth.isAuthenticated ? hfAuth.logout() : hfAuth.openLoginModal()"
-                        class="px-4 py-2 text-sm font-semibold rounded-xl shadow-sm transition-all hover:shadow-md"
-                        style="background-color: #fef3c7; color: #92400e; border: 1px solid #fcd34d;"
-                        onmouseover="this.style.backgroundColor='#fde68a'"
-                        onmouseout="this.style.backgroundColor='#fef3c7'"
-                    >
-                        🤗 Login
-                    </button>
-                </div>
-                <!-- Toggle Daemon slider -->
-                <span>
-                    <label>
-                        <input id="daemon-toggle" type="checkbox" value="" class="sr-only peer">
-                        <div id="daemon-toggle-slider"
-                            class="relative w-20 h-8 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-gray-100 dark:peer-focus:ring-gray-100 rounded-full peer dark:bg-red-400 peer-checked:after:translate-x-[46px] rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-7 after:w-7 after:transition-all dark:border-gray-600 peer-checked:bg-green-400 dark:peer-checked:bg-green-400 hidden">
-                            <span id="daemon-toggle-on"
-                                class="absolute top-1/2 start-1.5 -translate-y-1/2 justify-center items-center size-7 text-white peer-checked:text-white transition-colors duration-200 hidden">ON</span>
-                            <span id="daemon-toggle-off"
-                                class="absolute top-1/2 end-2.5 -translate-y-1/2 flex justify-center items-center size-7 text-white">
-                                OFF
-                            </span>
-                        </div>
-                    </label>
-                </span>
-            </div>
+<!-- ===== Command bar ===== -->
+<header class="console-bar">
+    <div class="console-brand">
+        <div class="console-mark">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                stroke-linecap="round" stroke-linejoin="round">
+                <rect x="4" y="7" width="16" height="12" rx="2.5" />
+                <path d="M12 7V3.5" />
+                <circle cx="12" cy="3" r="1" fill="currentColor" stroke="none" />
+                <circle cx="9" cy="13" r="1.4" fill="currentColor" stroke="none" />
+                <circle cx="15" cy="13" r="1.4" fill="currentColor" stroke="none" />
+                <path d="M2 11v4M22 11v4" />
+            </svg>
         </div>
-        <!-- Daemon status: -->
-        <div id="backend-status" class="">
-            <div class="flex items-center pt-1 w-full">
-                <span id="backend-status-icon" class="inline-block w-4 h-4 rounded-full align-middle mr-2"></span>
-                <span id="backend-status-text" class="daemon-status-collapse"></span>
-            </div>
+        <div class="console-brand-text">
+            <div class="console-wordmark">DREAMBO<span> · TORSO</span></div>
+            <div class="console-sub">Operator Console</div>
+        </div>
+    </div>
+
+    <div class="console-bar-right">
+        <div class="net-chip">
+            <span class="net-dot"></span>
+            HOST <b id="net-host">—</b>
         </div>
 
-        <div class="mt-4">
-            {% include 'sections/move_player.html' %}
+        <!-- HuggingFace / CreatEra Auth (ids preserved for hf_auth.js) -->
+        <div id="hf-header-auth" class="flex items-center gap-2">
+            <div id="hf-relay-status" class="hidden px-2 py-1 rounded-md flex items-center gap-1.5 cursor-help"
+                title="HF Space Apps">
+                <div id="hf-relay-indicator" class="w-2 h-2 rounded-full" style="background-color: #9ca3af;"></div>
+                <span id="hf-relay-text" class="text-xs font-medium">--</span>
+            </div>
+            <div id="hf-header-user-badge" class="hidden px-3 py-1.5 rounded-lg flex items-center gap-2">
+                <div class="w-2 h-2 rounded-full" style="background-color: #10b981;"></div>
+                <span class="text-sm font-medium">ModelScope<span id="hf-header-username"></span></span>
+            </div>
+            <button id="hf-header-auth-btn"
+                onclick="hfAuth.isAuthenticated ? hfAuth.logout() : hfAuth.openLoginModal()"
+                class="font-semibold transition-all">
+                🤗 Login
+            </button>
         </div>
-        {% if args.wireless_version %}
-        <div class="w-full flex  pt-4 gap-4 justify-center">
-            <a id="daemon-logs-btn"
-                class="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-300 rounded-lg shadow border border-gray-300"
-                href="/logs">
-                Logs
-            </a>
-            <a id="daemon-settings-btn"
-                class="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-300 rounded-lg shadow border border-gray-300"
-                href="/settings">
-                Settings
-            </a>
+    </div>
+</header>
+
+<!-- ===== System status ===== -->
+<section class="panel system-panel">
+    <div class="panel-head">
+        <span class="panel-label">System Status</span>
+        <span class="panel-rule"></span>
+    </div>
+
+    <div class="system-grid">
+        <div class="system-readout">
+            <div class="readout-eyebrow">Daemon State</div>
+            <div class="state-line">
+                <span id="backend-status-icon" class="state-led"></span>
+                <span id="daemon-state-word" class="state-word">STANDBY</span>
+            </div>
+            <div id="backend-status">
+                <span id="backend-status-text" class="state-sub">Awaiting status…</span>
+            </div>
+
+            <dl class="telemetry">
+                <dt>Unit</dt>
+                <dd>Dreambo Torso</dd>
+                <dt>Host</dt>
+                <dd id="telemetry-host">—</dd>
+                <dt>Link</dt>
+                <dd>HTTP · port 8000</dd>
+                <dt>State</dt>
+                <dd id="telemetry-state">—</dd>
+            </dl>
         </div>
-        {% endif %}
+
+        <div class="power-column">
+            <div class="power-eyebrow">Main Power</div>
+            <label class="latch">
+                <input id="daemon-toggle" type="checkbox" value="" class="sr-only">
+                <div id="daemon-toggle-slider" class="latch-track hidden">
+                    <span id="daemon-toggle-on" class="latch-legend hidden">ON</span>
+                    <span id="daemon-toggle-off" class="latch-legend">OFF</span>
+                </div>
+            </label>
+            <div class="state-sub" style="margin-top:2px;">Toggle to wake or sleep the torso.</div>
+        </div>
+    </div>
+
+    {% if args.wireless_version %}
+    <div class="flex pt-4 gap-3 justify-end" style="margin-top:18px; border-top:1px solid var(--line); padding-top:16px;">
+        <a id="daemon-logs-btn" class="net-chip" href="/logs">Logs</a>
+        <a id="daemon-settings-btn" class="net-chip" href="/settings">Settings</a>
+    </div>
+    {% endif %}
 </section>
+
+<script>
+    (function () {
+        var host = location.host || (location.hostname + (location.port ? ':' + location.port : ''));
+        var netHost = document.getElementById('net-host');
+        var telHost = document.getElementById('telemetry-host');
+        if (netHost) netHost.textContent = location.hostname;
+        if (telHost) telHost.textContent = host;
+    })();
+</script>
