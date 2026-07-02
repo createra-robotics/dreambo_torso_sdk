@@ -1,3 +1,7 @@
 [submodule "src/dreambo/descriptions/dreambo_torso/urdf"]
 	path = src/dreambo_torso/descriptions/dreambo_torso/urdf
 	url = git@github.com:createra-robotics/dreambo_description.git
+[submodule "plugins/gst-plugins-rs"]
+	path = plugins/gst-plugins-rs
+	url = https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs.git
+	# pinned to tag 0.14.4 — do not run `git submodule update --remote` on this
