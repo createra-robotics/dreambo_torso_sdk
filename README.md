@@ -10,7 +10,7 @@
 - Rust
 - WebRTC Plugin
 
-### Raspberry Pi swap
+### System swap
 
 ```bash
 sudo fallocate -l 4G /swapfile
@@ -19,7 +19,9 @@ sudo mkswap /swapfile
 sudo swapon /swapfile
 ```
 
-#### Ubuntu Dependencies
+## Ubuntu Dependencies
+
+### Ubuntu 24.04
 
 ```bash
 sudo sed -i 's|http://ports.ubuntu.com/ubuntu-ports|https://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports|g' /etc/apt/sources.list.d/ubuntu.sources
@@ -54,6 +56,12 @@ sudo apt install -y pipewire pipewire-pulse wireplumber pulseaudio-utils
 sudo apt install gstreamer1.0-plugins-base-apps
 #example: gst-device-monitor-1.0 Audio/Source 2>&1 | head -80
 ````
+
+### Ubuntu 22.04
+
+No support
+
+---
 
 #### Rust
 
